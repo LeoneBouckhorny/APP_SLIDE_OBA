@@ -4,20 +4,14 @@ from pptx import Presentation
 from collections import defaultdict
 from io import BytesIO
 
-# === Funções de Processamento de Dados (CORRIGIDA) ===
-
+# === Funções de Processamento de Dados (sem alterações) ===
 def formatar_texto(texto, maiusculo_estado=False):
-    """Formata uma string, capitalizando palavras e tratando o estado."""
     texto = ' '.join(texto.strip().split())
     if maiusculo_estado:
         return texto.upper()
     return ' '.join(w.capitalize() for w in texto.split())
 
 def extrair_e_estruturar_dados(uploaded_file):
-    """
-    Lê a tabela de um arquivo .docx e retorna uma lista de dicionários,
-    um para cada equipe, com os dados já processados e prontos para o slide.
-    """
     doc = Document(uploaded_file)
     dados_brutos = []
     
@@ -55,70 +49,58 @@ def extrair_e_estruturar_dados(uploaded_file):
         acompanhante_obj = [m for m in membros if "acompanhante" in m["Funcao"]]
         alunos_obj = sorted([m for m in membros if "aluno" in m["Funcao"]], key=lambda m: formatar_texto(m["Nome"]))
 
-        # --- ALTERAÇÃO PRINCIPAL AQUI ---
-        # Agora, cada função tem sua própria variável.
         nome_lider = formatar_texto(lider_obj[0]["Nome"]) if lider_obj else ""
         nome_acompanhante = formatar_texto(acompanhante_obj[0]["Nome"]) if acompanhante_obj else ""
         nomes_alunos = "\n".join([formatar_texto(m["Nome"]) for m in alunos_obj])
 
         if membros:
             info_geral = membros[0]
-            # O dicionário final agora tem campos separados para cada função
             dados_finais_para_slides.append({
-                "NomeLider": nome_lider,
-                "NomeAcompanhante": nome_acompanhante,
-                "NomesAlunos": nomes_alunos,
-                "NomeEquipe": f"Equipe: {equipe_nome.split()[-1]}",
-                "LancamentosValidos": f"ALCANCE: {info_geral['Valido']} m",
-                "NomeEscola": formatar_texto(info_geral["Escola"]),
-                "CidadeUF": f"{formatar_texto(info_geral['Cidade'])} / {formatar_texto(info_geral['Estado'], maiusculo_estado=True)}",
-                "TituloMedalha": formatar_texto(info_geral["Medalha"]).upper()
+                "{{NOME_LIDER}}": nome_lider,
+                "{{NOME_ACOMPANHANTE}}": nome_acompanhante,
+                "{{NOMES_ALUNOS}}": nomes_alunos,
+                "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
+                "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info_geral['Valido']} m",
+                "{{NOME_ESCOLA}}": formatar_texto(info_geral["Escola"]),
+                "{{CIDADE_UF}}": f"{formatar_texto(info_geral['Cidade'])} / {formatar_texto(info_geral['Estado'], maiusculo_estado=True)}",
+                "{{TITULO_MEDALHA}}": formatar_texto(info_geral["Medalha"]).upper()
             })
-
     return dados_finais_para_slides
 
-# === Função de Geração de PowerPoint (sem alterações) ===
+# === Função de Geração de PowerPoint (ATUALIZADA PARA LER TAGS) ===
 
-def generate_presentation(team_data, template_file, placeholder_map):
+def generate_presentation(team_data, template_file):
     prs = Presentation(template_file)
-    slide_layout = prs.slide_layouts[0]
+    
+    # Pega o layout do primeiro slide como base para os novos slides
+    slide_layout = prs.slide_layouts[0] 
 
     for team in team_data:
         slide = prs.slides.add_slide(slide_layout)
+
+        # Itera sobre todas as formas do slide para encontrar e substituir as tags
         for shape in slide.shapes:
-            if shape.name in placeholder_map:
-                data_key = placeholder_map[shape.name]
-                text_to_insert = team.get(data_key, "")
-                
-                if shape.has_text_frame:
+            if not shape.has_text_frame:
+                continue
+            
+            # Itera sobre todas as chaves (tags) que precisamos substituir
+            for key, value in team.items():
+                if key in shape.text:
                     text_frame = shape.text_frame
-                    text_frame.clear()
-                    p = text_frame.paragraphs[0]
-                    run = p.add_run()
-                    run.text = text_to_insert
+                    for paragraph in text_frame.paragraphs:
+                        for run in paragraph.runs:
+                            # Substitui a tag pelo valor
+                            run.text = run.text.replace(key, value)
     return prs
 
-# === Interface Streamlit ===
+# === Interface Streamlit (Simplificada e Final) ===
 
 st.set_page_config(layout="wide")
 st.title("🚀 Gerador Automático de Slides")
 st.info("Faça o upload da tabela de dados e do modelo de PowerPoint para gerar a apresentação final.")
 
-# --- Mapeamento Fixo de Placeholders (ATUALIZADO) ---
-# O programa agora espera que os shapes no seu PPT tenham EXATAMENTE estes nomes.
-PLACEHOLDER_MAP_FIXO = {
-    "NomeLider": "NomeLider",
-    "NomeAcompanhante": "NomeAcompanhante",
-    "NomesAlunos": "NomesAlunos",
-    "NomeEquipe": "NomeEquipe",
-    "NomeEscola": "NomeEscola",
-    "CidadeUF": "CidadeUF",
-    "LancamentosValidos": "LancamentosValidos",
-    "TituloMedalha": "TituloMedalha"
-}
-
 st.header("1. Carregue os Arquivos")
-st.write("Certifique-se que o arquivo de modelo `.pptx` já está com os placeholders nomeados corretamente conforme a convenção.")
+st.write("Certifique-se que o arquivo de modelo `.pptx` (baixado do Google Slides) contém as tags de texto, como `{{NOME_LIDER}}`.")
 
 uploaded_data_file = st.file_uploader("Arquivo .docx com a TABELA DE DADOS", type=["docx"])
 uploaded_template_file = st.file_uploader("Arquivo .pptx com o MODELO DE SLIDE", type=["pptx"])
@@ -133,7 +115,7 @@ if st.button("✨ Gerar Slides!", use_container_width=True):
                 teams_data = extrair_e_estruturar_dados(uploaded_data_file)
                 
                 if teams_data:
-                    presentation = generate_presentation(teams_data, uploaded_template_file, PLACEHOLDER_MAP_FIXO)
+                    presentation = generate_presentation(teams_data, uploaded_template_file)
 
                     pptx_buffer = BytesIO()
                     presentation.save(pptx_buffer)
@@ -147,7 +129,7 @@ if st.button("✨ Gerar Slides!", use_container_width=True):
 
             except Exception as e:
                 st.error(f"Ocorreu um erro: {e}")
-                st.error("Dica: Verifique se a tabela no arquivo .docx está correta e se os nomes dos placeholders no PowerPoint correspondem EXATAMENTE à convenção.")
+                st.error("Dica: Verifique se a tabela no arquivo .docx está correta e se as tags no modelo .pptx estão escritas corretamente (ex: `{{NOME_EQUIPE}}`).")
     else:
         st.warning("Por favor, carregue os dois arquivos.")
 
