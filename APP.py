@@ -89,7 +89,7 @@ def generate_presentation(team_data, template_file, placeholder_map):
 st.title("Gerador de Slides para Equipes")
 
 st.header("1. Carregue os Arquivos")
-uploaded_data = st.file_uploader("Escolha o arquivo com a lista de equipes (.txt)", type="txt")
+uploaded_data = st.file_uploader("Escolha o arquivo com a lista de equipes (.txt ou .docx)", type="txt, docx")
 uploaded_template = st.file_uploader("Escolha o modelo de PowerPoint (.pptx)", type="pptx")
 
 st.header("2. Mapeie os Campos do Slide")
@@ -150,4 +150,5 @@ if 'generation_complete' in st.session_state and st.session_state.generation_com
         data=st.session_state.pptx_buffer,
         file_name="apresentacao_equipes.pptx",
         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
     )
