@@ -3,18 +3,18 @@ from docx import Document
 from pptx import Presentation
 from collections import defaultdict
 from io import BytesIO
-import zipfile
-import re
 from copy import deepcopy
 
-# === Funções de Processamento de Dados (sem alterações) ===
+# === Funções de Processamento de Dados (sem o campo "Medalha") ===
 def formatar_texto(texto, maiusculo_estado=False):
+    """Formata uma string, capitalizando palavras e tratando o estado."""
     texto = ' '.join(texto.strip().split())
     if maiusculo_estado:
         return texto.upper()
     return ' '.join(w.capitalize() for w in texto.split())
 
 def extrair_e_estruturar_dados(uploaded_file):
+    """Lê a tabela de um arquivo .docx e retorna uma lista de dicionários para cada equipe."""
     doc = Document(uploaded_file)
     dados_brutos = []
     
@@ -28,9 +28,10 @@ def extrair_e_estruturar_dados(uploaded_file):
             
             valores = [c.text.strip() for c in linha.cells]
             if len(valores) >= 8:
+                # O campo "medalha" é lido mas não será usado
                 medalha, valido, equipe, funcao, escola, cidade, estado, nome = valores[:8]
                 dados_brutos.append({
-                    "Medalha": medalha, "Valido": valido, "Equipe": equipe, "Funcao": funcao.lower(),
+                    "Valido": valido, "Equipe": equipe, "Funcao": funcao.lower(),
                     "Escola": escola, "Cidade": cidade, "Estado": estado, "Nome": nome
                 })
 
@@ -58,6 +59,7 @@ def extrair_e_estruturar_dados(uploaded_file):
 
         if membros:
             info_geral = membros[0]
+            # Dicionário final sem a chave da medalha
             dados_finais_para_slides.append({
                 "{{NOME_LIDER}}": nome_lider,
                 "{{NOME_ACOMPANHANTE}}": nome_acompanhante,
@@ -66,65 +68,70 @@ def extrair_e_estruturar_dados(uploaded_file):
                 "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info_geral['Valido']} m",
                 "{{NOME_ESCOLA}}": formatar_texto(info_geral["Escola"]),
                 "{{CIDADE_UF}}": f"{formatar_texto(info_geral['Cidade'])} / {formatar_texto(info_geral['Estado'], maiusculo_estado=True)}",
-                "{{TITULO_MEDALHA}}": formatar_texto(info_geral["Medalha"]).upper()
             })
     return dados_finais_para_slides
 
-# === FUNÇÃO DE GERAÇÃO DE SLIDES (CORRIGIDA) ===
+# === Funções de Geração de PowerPoint (Lógica Estável) ===
 
-def merge_presentations(template_bytes, all_teams_data):
-    """
-    Cria uma apresentação final juntando cópias do slide modelo,
-    uma para cada equipe, e substituindo as tags no nível do XML.
-    """
-    final_pres_stream = BytesIO()
+def replace_text_in_shape(shape, team_data):
+    """Substitui as tags de texto em uma forma específica."""
+    if not shape.has_text_frame:
+        return
 
-    # --- CORREÇÃO AQUI ---
-    # Cria a apresentação final vazia sem usar o 'with'
-    final_prs = Presentation()
-    
-    # Remove o slide inicial em branco que o `pptx` cria por padrão
-    rId = final_prs.slides._sldIdLst[0].rId
-    final_prs.part.drop_rel(rId)
-    del final_prs.slides._sldIdLst[0]
-    
-    # Itera sobre cada equipe para criar e adicionar um slide modificado
-    for team_data in all_teams_data:
-        template_stream = BytesIO(template_bytes)
+    text_frame = shape.text_frame
+    for paragraph in text_frame.paragraphs:
+        full_text = "".join(run.text for run in paragraph.runs)
         
-        # Abre a cópia do template em memória como um arquivo zip
-        with zipfile.ZipFile(template_stream, 'a') as pptx_zip:
-            slide_xml_path = 'ppt/slides/slide1.xml'
-            xml_content = pptx_zip.read(slide_xml_path).decode('utf-8')
-            
-            # Substitui cada tag com os dados da equipe no XML
-            for key, value in team_data.items():
-                xml_value = value.replace('\n', '</a:t><a:br/><a:t>')
-                xml_content = xml_content.replace(key, xml_value)
-            
-            # Escreve o XML modificado de volta no arquivo zip em memória
-            pptx_zip.writestr(slide_xml_path, xml_content)
-
-        # Abre a apresentação modificada (com um único slide)
-        template_stream.seek(0)
-        prs_with_one_slide = Presentation(template_stream)
-        slide_to_add = prs_with_one_slide.slides[0]
-
-        # Adiciona um slide em branco à apresentação final, usando um layout padrão
-        slide_layout = final_prs.slide_layouts[0] 
-        new_slide = final_prs.slides.add_slide(slide_layout)
+        for key, value in team_data.items():
+            if key in full_text:
+                full_text = full_text.replace(key, value)
         
-        # Copia todos os elementos (formas, imagens, etc.) do slide modificado para o novo slide
-        for shape in slide_to_add.shapes:
-            new_el = deepcopy(shape.element)
-            new_slide.shapes._spTree.add_element(new_el)
-    
-    # Salva a apresentação final completa no stream de memória
-    final_prs.save(final_pres_stream)
-    final_pres_stream.seek(0)
-    return final_pres_stream
+        # Limpa os 'runs' antigos e adiciona um novo com o texto completo
+        while len(paragraph.runs) > 0:
+            p = paragraph._p
+            p.remove(paragraph.runs[0]._r)
+        
+        paragraph.add_run().text = full_text
 
-# === Interface Streamlit (sem alterações) ===
+def duplicate_slide(prs, index):
+    """Duplica um slide e o adiciona no final da apresentação."""
+    template = prs.slides[index]
+    try:
+        blank_slide_layout = prs.slide_layouts[6]
+    except IndexError:
+        blank_slide_layout = prs.slide_layouts[len(prs.slide_layouts) - 1]
+
+    copied_slide = prs.slides.add_slide(blank_slide_layout)
+
+    for shape in template.shapes:
+        new_el = deepcopy(shape.element)
+        copied_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
+    
+    return copied_slide
+
+def generate_presentation(team_data, template_file):
+    """Gera a apresentação final."""
+    prs = Presentation(template_file)
+    
+    if not team_data or not prs.slides:
+        return prs # Retorna a apresentação vazia se não houver dados ou slides
+
+    # Modifica o primeiro slide para a primeira equipe
+    first_slide = prs.slides[0]
+    first_team = team_data[0]
+    for shape in first_slide.shapes:
+        replace_text_in_shape(shape, first_team)
+
+    # Para as equipes restantes, duplica o primeiro slide e modifica a cópia
+    for i in range(1, len(team_data)):
+        team = team_data[i]
+        new_slide = duplicate_slide(prs, 0)
+        for shape in new_slide.shapes:
+            replace_text_in_shape(shape, team)
+            
+    return prs
+
+# === Interface Streamlit ===
 
 st.set_page_config(layout="wide")
 st.title("🚀 Gerador Automático de Slides")
@@ -146,10 +153,13 @@ if st.button("✨ Gerar Slides!", use_container_width=True):
                 teams_data = extrair_e_estruturar_dados(uploaded_data_file)
                 
                 if teams_data:
-                    template_bytes = uploaded_template_file.getvalue()
-                    final_presentation_stream = merge_presentations(template_bytes, teams_data)
+                    presentation = generate_presentation(teams_data, uploaded_template_file)
 
-                    st.session_state.pptx_buffer = final_presentation_stream
+                    pptx_buffer = BytesIO()
+                    presentation.save(pptx_buffer)
+                    pptx_buffer.seek(0)
+                    
+                    st.session_state.pptx_buffer = pptx_buffer
                     st.session_state.generation_complete = True
                     st.success(f"Apresentação com {len(teams_data)} slides gerada com sucesso!")
                 else:
