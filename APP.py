@@ -1,112 +1,107 @@
 import streamlit as st
-import pandas as pd
+from docx import Document
 from pptx import Presentation
-from pptx.util import Pt
+from collections import defaultdict
 from io import BytesIO
-import docx # Importa a nova biblioteca
+import os
 
-def parse_team_data(uploaded_file):
+# === Funções de Processamento de Dados (do primeiro script, modificadas) ===
+
+def formatar_texto(texto, maiusculo_estado=False):
+    """Formata uma string, capitalizando palavras e tratando o estado."""
+    texto = ' '.join(texto.strip().split())
+    if maiusculo_estado:
+        return texto.upper()
+    return ' '.join(w.capitalize() for w in texto.split())
+
+def extrair_e_estruturar_dados(uploaded_file):
     """
-    Analisa o arquivo .docx com as informações das equipes.
-    Espera-se que as equipes sejam separadas por uma linha em branco.
+    Lê a tabela de um arquivo .docx e retorna uma lista de dicionários,
+    um para cada equipe, com os dados já processados e prontos para o slide.
     """
-    document = docx.Document(uploaded_file)
-    parsed_teams = []
-    current_team_block = []
-
-    for para in document.paragraphs:
-        line_text = para.text.strip()
-        
-        if not line_text: # Se a linha está em branco, é um separador de equipe
-            if current_team_block: # Processa o bloco da equipe anterior
-                team_info = process_block(current_team_block)
-                parsed_teams.append(team_info)
-                current_team_block = [] # Limpa para a próxima equipe
-        else:
-            current_team_block.append(line_text)
+    doc = Document(uploaded_file)
+    dados_brutos = []
     
-    # Processa a última equipe do arquivo (que não terá uma linha em branco depois)
-    if current_team_block:
-        team_info = process_block(current_team_block)
-        parsed_teams.append(team_info)
+    # 1. Extrair dados da tabela do Word
+    if not doc.tables:
+        st.error("Nenhuma tabela encontrada no arquivo DOCX.")
+        return None
 
-    return parsed_teams
+    for tabela in doc.tables:
+        for i, linha in enumerate(tabela.rows):
+            if i == 0: continue # Ignora cabeçalho
+            
+            valores = [c.text.strip() for c in linha.cells]
+            if len(valores) >= 8:
+                medalha, valido, equipe, funcao, escola, cidade, estado, nome = valores[:8]
+                dados_brutos.append({
+                    "Valido": valido, "Equipe": equipe, "Funcao": funcao.lower(),
+                    "Escola": escola, "Cidade": cidade, "Estado": estado, "Nome": nome
+                })
 
-def process_block(lines):
-    """Função auxiliar para processar as linhas de um único bloco de equipe."""
-    team_info = {}
-    
-    # Extrai nomes de participantes
-    participants = []
-    for i, line in enumerate(lines):
-        if line.startswith("Equipe:"):
-            participant_end_index = i
-            break
-        participants.append(line)
-    else:
-        participant_end_index = len(lines)
+    # 2. Agrupar dados por equipe
+    equipes = defaultdict(list)
+    for item in dados_brutos:
+        equipes[item["Equipe"]].append(item)
 
-    # Assumindo a ordem: Líder, Acompanhante (opcional), Alunos
-    team_info['Líder'] = participants[0] if len(participants) > 0 else ""
-    
-    if len(participants) > 1 and not lines[1].startswith("Equipe:"):
-         # Heurística para diferenciar Acompanhante de uma lista de Alunos
-         if "Acompanhante" in lines[0] or "Líder" in lines[0] or len(participants) > 2:
-             team_info['Acompanhante'] = participants[1]
-             team_info['Alunos'] = "\n".join(participants[2:]) if len(participants) > 2 else ""
-         else:
-             team_info['Acompanhante'] = ""
-             team_info['Alunos'] = "\n".join(participants[1:])
-    else:
-        team_info['Acompanhante'] = ""
-        team_info['Alunos'] = "\n".join(participants[1:]) if len(participants) > 1 else ""
-    
-    # Extrai outras informações
-    for line in lines[participant_end_index:]:
-        if line.startswith("Equipe:"):
-            team_info['Equipe'] = line.split(":", 1)[1].strip()
-        elif line.startswith("Lançamentos Válidos:"):
-            team_info['Lançamentos Válidos'] = line.split(":", 1)[1].strip()
-        elif "/" in line and len(line.split('/')) == 2:
-             cidade, estado = [x.strip() for x in line.split('/')]
-             team_info['Cidade'] = cidade
-             team_info['Estado'] = estado
-        else: # Nome da Escola
-            if 'Nome da Escola' not in team_info:
-                team_info['Nome da Escola'] = line
+    # 3. Ordenar equipes pelo lançamento válido
+    def valor_valido(membros):
+        try:
+            return float(membros[0]['Valido'].replace(',', '.'))
+        except (ValueError, IndexError):
+            return float('inf') # Equipes sem valor válido vão para o final
 
-    return team_info
+    equipes_ordenadas = sorted(equipes.items(), key=lambda x: valor_valido(x[1]))
 
+    # 4. Estruturar os dados no formato final para cada equipe
+    dados_finais_para_slides = []
+    for equipe_nome, membros in equipes_ordenadas:
+        lider_obj = [m for m in membros if "líder" in m["Funcao"] or "lider" in m["Funcao"]]
+        acompanhante_obj = [m for m in membros if "acompanhante" in m["Funcao"]]
+        alunos_obj = sorted([m for m in membros if "aluno" in m["Funcao"]], key=lambda m: formatar_texto(m["Nome"]))
+
+        # Formata os nomes para exibição
+        nome_lider = formatar_texto(lider_obj[0]["Nome"]) if lider_obj else ""
+        nome_acompanhante = formatar_texto(acompanhante_obj[0]["Nome"]) if acompanhante_obj else ""
+        nomes_alunos = "\n".join([formatar_texto(m["Nome"]) for m in alunos_obj])
+
+        if membros:
+            info_geral = membros[0]
+            equipe_formatada = f"Equipe: {equipe_nome.split()[-1]}"
+            lancamento_formatado = f"ALCANCE: {info_geral['Valido']} m"
+            escola_formatada = formatar_texto(info_geral["Escola"])
+            cidade_uf_formatada = f"{formatar_texto(info_geral['Cidade'])} / {formatar_texto(info_geral['Estado'], maiusculo_estado=True)}"
+
+            dados_finais_para_slides.append({
+                "Líder": nome_lider,
+                "Acompanhante": nome_acompanhante,
+                "Alunos": nomes_alunos,
+                "Equipe": equipe_formatada,
+                "Lançamentos Válidos": lancamento_formatado,
+                "Nome da Escola": escola_formatada,
+                "Cidade / UF": cidade_uf_formatada
+            })
+
+    return dados_finais_para_slides
+
+# === Função de Geração de PowerPoint (do segundo script) ===
 
 def generate_presentation(team_data, template_file, placeholder_map):
-    """
-    Gera a apresentação de slides a partir dos dados da equipe e do modelo.
-    """
+    """Gera a apresentação de slides a partir dos dados da equipe e do modelo."""
     prs = Presentation(template_file)
-    
-    # Seleciona o layout do primeiro slide do template como base
-    slide_layout = prs.slide_layouts[0] 
+    slide_layout = prs.slide_layouts[0] # Usar o primeiro layout como padrão
 
     for team in team_data:
         slide = prs.slides.add_slide(slide_layout)
 
-        for shape in slide.placeholders:
-            if shape.name in placeholder_map:
-                key_map = placeholder_map[shape.name]
-                text_to_insert = team.get(key_map, "") # Usa .get para evitar erros se uma chave não existir
-                
-                # Preenche o texto no placeholder
-                text_frame = shape.text_frame
-                text_frame.clear() # Limpa qualquer texto padrão
-                p = text_frame.paragraphs[0]
-                run = p.add_run()
-                run.text = text_to_insert
-
-        # Você pode também procurar por shapes que não são placeholders, se necessário
         for shape in slide.shapes:
+            # Checa se o nome do shape (placeholder) está no nosso mapeamento
             if shape.name in placeholder_map:
-                key_map = placeholder_map[shape.name]
-                text_to_insert = team.get(key_map, "")
+                # Pega a chave dos nossos dados (ex: "Líder", "Alunos")
+                data_key = placeholder_map[shape.name]
+                # Pega o texto correspondente para a equipe atual
+                text_to_insert = team.get(data_key, "")
+                
                 if shape.has_text_frame:
                     text_frame = shape.text_frame
                     text_frame.clear()
@@ -116,78 +111,81 @@ def generate_presentation(team_data, template_file, placeholder_map):
 
     return prs
 
-# --- Interface do Streamlit ---
+# === Interface Streamlit Unificada ===
 
-st.title("Gerador de Slides para Equipes")
+st.set_page_config(layout="wide")
+st.title("🚀 Gerador de Slides para Jornada de Foguetes")
 
-st.header("1. Carregue os Arquivos")
-# ATUALIZADO para aceitar .docx
-uploaded_data = st.file_uploader("Escolha o arquivo Word com a lista de equipes (.docx)", type=["docx"])
-uploaded_template = st.file_uploader("Escolha o modelo de PowerPoint (.pptx)", type="pptx")
-
-st.header("2. Mapeie os Campos do Slide")
-st.write("Preencha com os nomes dos 'Placeholders' do seu slide modelo. Para encontrar os nomes, em seu PowerPoint, vá em `Página Inicial` > `Organizar` > `Painel de Seleção`.")
+st.info("Este aplicativo lê uma tabela de dados de um arquivo `.docx`, processa as equipes e gera uma apresentação de slides `.pptx` a partir de um modelo.")
 
 col1, col2 = st.columns(2)
 
 with col1:
+    st.header("1. Carregue os Arquivos")
+    uploaded_data_file = st.file_uploader("Arquivo .docx com a TABELA DE DADOS", type=["docx"])
+    uploaded_template_file = st.file_uploader("Arquivo .pptx com o MODELO DE SLIDE", type=["pptx"])
+
+with col2:
+    st.header("2. Mapeie os Campos do Slide")
+    st.write("Preencha com os nomes dos 'Placeholders' do seu slide modelo. (Encontre em `Página Inicial > Organizar > Painel de Seleção` no PowerPoint).")
+    
     leader_placeholder = st.text_input("Placeholder para o Líder", "NomeLider")
     accompanist_placeholder = st.text_input("Placeholder para o Acompanhante", "NomeAcompanhante")
     students_placeholder = st.text_input("Placeholder para os Alunos", "NomesAlunos")
-    team_name_placeholder = st.text_input("Placeholder para o Nome da Equipe", "NomeEquipe")
+    team_name_placeholder = st.text_input("Placeholder para a Equipe", "NomeEquipe")
+    launches_placeholder = st.text_input("Placeholder para o Alcance", "LancamentosValidos")
+    school_name_placeholder = st.text_input("Placeholder para a Escola", "NomeEscola")
+    city_state_placeholder = st.text_input("Placeholder para Cidade / UF", "CidadeUF")
 
-with col2:
-    launches_placeholder = st.text_input("Placeholder para Lançamentos Válidos", "LancamentosValidos")
-    school_name_placeholder = st.text_input("Placeholder para o Nome da Escola", "NomeEscola")
-    city_placeholder = st.text_input("Placeholder para a Cidade", "NomeCidade")
-    state_placeholder = st.text_input("Placeholder para o Estado", "SiglaEstado")
+st.divider()
 
-placeholder_mapping = {
-    leader_placeholder: "Líder",
-    accompanist_placeholder: "Acompanhante",
-    students_placeholder: "Alunos",
-    team_name_placeholder: "Equipe",
-    launches_placeholder: "Lançamentos Válidos",
-    school_name_placeholder: "Nome da Escola",
-    city_placeholder: "Cidade",
-    state_placeholder: "Estado"
-}
-# Filtra entradas vazias do usuário para não causar erros
-placeholder_mapping = {k: v for k, v in placeholder_mapping.items() if k}
-
-
-st.header("3. Gere e Baixe a Apresentação")
-if st.button("Gerar Apresentação"):
-    if uploaded_data is not None and uploaded_template is not None:
-        with st.spinner("Processando..."):
+st.header("3. Gere a Apresentação")
+if st.button("✨ Gerar Slides!", use_container_width=True):
+    if uploaded_data_file and uploaded_template_file:
+        with st.spinner("Processando dados e criando apresentação..."):
             try:
-                teams = parse_team_data(uploaded_data)
-                
-                if not teams:
-                     st.error("Nenhuma equipe encontrada no arquivo. Verifique se o formato está correto (equipes separadas por uma linha em branco).")
-                else:
-                    presentation = generate_presentation(teams, uploaded_template, placeholder_mapping)
+                # Mapeamento dos placeholders para as chaves de dados
+                placeholder_mapping = {
+                    leader_placeholder: "Líder",
+                    accompanist_placeholder: "Acompanhante",
+                    students_placeholder: "Alunos",
+                    team_name_placeholder: "Equipe",
+                    launches_placeholder: "Lançamentos Válidos",
+                    school_name_placeholder: "Nome da Escola",
+                    city_state_placeholder: "Cidade / UF"
+                }
+                # Filtra mapeamentos com chaves vazias
+                placeholder_mapping = {k: v for k, v in placeholder_mapping.items() if k}
 
-                    # Salvar apresentação em memória
+                # Passo 1: Extrair e estruturar os dados do .docx
+                teams_data = extrair_e_estruturar_dados(uploaded_data_file)
+                
+                if teams_data:
+                    # Passo 2: Gerar a apresentação com os dados estruturados
+                    presentation = generate_presentation(teams_data, uploaded_template_file, placeholder_mapping)
+
+                    # Salvar em memória para download
                     pptx_buffer = BytesIO()
                     presentation.save(pptx_buffer)
                     pptx_buffer.seek(0)
                     
                     st.session_state.pptx_buffer = pptx_buffer
                     st.session_state.generation_complete = True
-
-                    st.success(f"Apresentação com {len(teams)} slides gerada com sucesso!")
+                    st.success(f"Apresentação com {len(teams_data)} slides gerada com sucesso!")
+                else:
+                    st.warning("Não foi possível gerar os slides. Verifique o arquivo de dados.")
 
             except Exception as e:
-                st.error(f"Ocorreu um erro ao processar os arquivos: {e}")
-                st.error("Verifique se os nomes dos placeholders estão corretos e se os arquivos não estão corrompidos.")
+                st.error(f"Ocorreu um erro: {e}")
+                st.error("Dica: Verifique se a tabela no arquivo .docx está correta e se os nomes dos placeholders correspondem exatamente aos do PowerPoint.")
     else:
         st.warning("Por favor, carregue o arquivo de dados e o modelo de PowerPoint.")
 
 if 'generation_complete' in st.session_state and st.session_state.generation_complete:
     st.download_button(
-        label="Baixar Apresentação",
+        label="📥 Baixar Apresentação Final",
         data=st.session_state.pptx_buffer,
-        file_name="apresentacao_equipes.pptx",
-        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        file_name="Apresentacao_Final_Equipes.pptx",
+        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        use_container_width=True
     )
