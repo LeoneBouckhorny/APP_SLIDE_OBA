@@ -3,7 +3,8 @@ from docx import Document
 from pptx import Presentation
 from collections import defaultdict
 from io import BytesIO
-from copy import deepcopy
+import zipfile
+import re
 
 # === Funções de Processamento de Dados (sem alterações) ===
 def formatar_texto(texto, maiusculo_estado=False):
@@ -68,70 +69,62 @@ def extrair_e_estruturar_dados(uploaded_file):
             })
     return dados_finais_para_slides
 
-# === FUNÇÃO DE GERAÇÃO DE SLIDES (CORRIGIDA) ===
+# === FUNÇÃO DE GERAÇÃO DE SLIDES (NOVA LÓGICA DEFINITIVA) ===
 
-def text_replacer(shape, team_data):
-    """Função auxiliar para encontrar e substituir texto em uma forma."""
-    if not shape.has_text_frame:
-        return
-    
-    text_frame = shape.text_frame
-    for paragraph in text_frame.paragraphs:
-        # Constrói o texto completo do parágrafo
-        full_text = "".join(run.text for run in paragraph.runs)
-        
-        # Itera sobre as tags e substitui se encontrar
-        for key, value in team_data.items():
-            if key in full_text:
-                full_text = full_text.replace(key, value)
-
-        # Limpa o parágrafo e adiciona o novo texto, preservando a formatação do parágrafo
-        # Isso pode perder formatações específicas de palavras (negrito/itálico), mas garante a substituição
-        for i, run in enumerate(paragraph.runs):
-            if i == 0:
-                run.text = full_text
-            else:
-                p = paragraph._p
-                p.remove(run._r)
-
-
-def generate_presentation(team_data, template_file):
+def merge_presentations(template_bytes, all_teams_data):
     """
-    Gera a apresentação duplicando o primeiro slide do modelo para cada equipe
-    e substituindo as tags de texto.
+    Cria uma apresentação final juntando cópias do slide modelo,
+    uma para cada equipe, e substituindo as tags no nível do XML.
     """
-    prs = Presentation(template_file)
-    
-    # O primeiro slide (índice 0) é o nosso modelo mestre
-    template_slide = prs.slides[0]
-    
-    # O layout do slide modelo
-    slide_layout = template_slide.slide_layout
+    final_pres_stream = BytesIO()
 
-    # Remove o slide modelo original da apresentação final.
-    # Fazemos isso pegando o elemento XML e depois removendo o slide.
-    slide_id = prs.slides.index(template_slide)
-    rId = prs.slides._sldIdLst[slide_id].rId
-    prs.part.drop_rel(rId)
-    del prs.slides._sldIdLst[slide_id]
-
-    # Para cada equipe, criamos um novo slide e copiamos o conteúdo
-    for team in team_data:
-        new_slide = prs.slides.add_slide(slide_layout)
+    # Cria a apresentação final vazia que será populada
+    with Presentation() as final_prs:
+        # Remove o slide inicial em branco
+        rId = final_prs.slides._sldIdLst[0].rId
+        final_prs.part.drop_rel(rId)
+        del final_prs.slides._sldIdLst[0]
         
-        # Copia as formas do slide modelo para o novo slide
-        for shape in template_slide.shapes:
-            new_el = deepcopy(shape.element)
-            new_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
-
-        # Agora, com o slide copiado, fazemos a substituição do texto
-        for shape in new_slide.shapes:
-            text_replacer(shape, team)
+        # Para cada equipe, cria uma cópia do template e substitui o texto
+        for i, team_data in enumerate(all_teams_data):
+            # Cria uma cópia do template em memória para cada slide
+            template_stream = BytesIO(template_bytes)
             
-    return prs
+            with zipfile.ZipFile(template_stream, 'a') as pptx_zip:
+                # Lê o conteúdo do XML do primeiro (e único) slide
+                slide_xml_path = 'ppt/slides/slide1.xml'
+                xml_content = pptx_zip.read(slide_xml_path).decode('utf-8')
+                
+                # Substitui cada tag com os dados da equipe
+                for key, value in team_data.items():
+                    # A substituição precisa lidar com tags XML para quebras de linha
+                    # Substituímos o \n por uma quebra de linha XML
+                    xml_value = value.replace('\n', '</a:t><a:br/><a:t>')
+                    xml_content = xml_content.replace(key, xml_value)
+                
+                # Escreve o conteúdo modificado de volta no zip em memória
+                pptx_zip.writestr(slide_xml_path, xml_content)
 
+            # Adiciona o slide modificado (a cópia em memória) à apresentação final
+            template_stream.seek(0)
+            prs_with_one_slide = Presentation(template_stream)
+            slide_to_add = prs_with_one_slide.slides[0]
 
-# === Interface Streamlit (sem alterações) ===
+            # Adiciona o slide à apresentação final
+            slide_layout = final_prs.slide_layouts[0] # Usamos um layout base
+            new_slide = final_prs.slides.add_slide(slide_layout)
+            
+            # Copia todos os elementos do slide modificado para o novo slide
+            for shape in slide_to_add.shapes:
+                new_el = shape.element
+                new_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
+        
+        final_prs.save(final_pres_stream)
+
+    final_pres_stream.seek(0)
+    return final_pres_stream
+
+# === Interface Streamlit ===
 
 st.set_page_config(layout="wide")
 st.title("🚀 Gerador Automático de Slides")
@@ -148,18 +141,18 @@ st.divider()
 st.header("2. Gere a Apresentação")
 if st.button("✨ Gerar Slides!", use_container_width=True):
     if uploaded_data_file and uploaded_template_file:
-        with st.spinner("Mapeando Foguetes... 🚀 Processando dados e criando apresentação..."):
+        with st.spinner("Construindo Foguetes... 🚀 Processando dados e montando a apresentação..."):
             try:
                 teams_data = extrair_e_estruturar_dados(uploaded_data_file)
                 
                 if teams_data:
-                    presentation = generate_presentation(teams_data, uploaded_template_file)
-
-                    pptx_buffer = BytesIO()
-                    presentation.save(pptx_buffer)
-                    pptx_buffer.seek(0)
+                    # Lê o conteúdo do arquivo modelo para a memória
+                    template_bytes = uploaded_template_file.getvalue()
                     
-                    st.session_state.pptx_buffer = pptx_buffer
+                    # Chama a nova função que trabalha com o XML
+                    final_presentation_stream = merge_presentations(template_bytes, teams_data)
+
+                    st.session_state.pptx_buffer = final_presentation_stream
                     st.session_state.generation_complete = True
                     st.success(f"Apresentação com {len(teams_data)} slides gerada com sucesso!")
                 else:
