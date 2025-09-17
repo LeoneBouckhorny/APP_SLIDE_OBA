@@ -3,6 +3,7 @@ from docx import Document
 from pptx import Presentation
 from collections import defaultdict
 from io import BytesIO
+from copy import deepcopy
 
 # === Funções de Processamento de Dados (sem alterações) ===
 def formatar_texto(texto, maiusculo_estado=False):
@@ -67,40 +68,77 @@ def extrair_e_estruturar_dados(uploaded_file):
             })
     return dados_finais_para_slides
 
-# === Função de Geração de PowerPoint (ATUALIZADA PARA LER TAGS) ===
+# === FUNÇÃO DE GERAÇÃO DE SLIDES (CORRIGIDA) ===
+
+def text_replacer(shape, team_data):
+    """Função auxiliar para encontrar e substituir texto em uma forma."""
+    if not shape.has_text_frame:
+        return
+    
+    text_frame = shape.text_frame
+    for paragraph in text_frame.paragraphs:
+        # Constrói o texto completo do parágrafo
+        full_text = "".join(run.text for run in paragraph.runs)
+        
+        # Itera sobre as tags e substitui se encontrar
+        for key, value in team_data.items():
+            if key in full_text:
+                full_text = full_text.replace(key, value)
+
+        # Limpa o parágrafo e adiciona o novo texto, preservando a formatação do parágrafo
+        # Isso pode perder formatações específicas de palavras (negrito/itálico), mas garante a substituição
+        for i, run in enumerate(paragraph.runs):
+            if i == 0:
+                run.text = full_text
+            else:
+                p = paragraph._p
+                p.remove(run._r)
+
 
 def generate_presentation(team_data, template_file):
+    """
+    Gera a apresentação duplicando o primeiro slide do modelo para cada equipe
+    e substituindo as tags de texto.
+    """
     prs = Presentation(template_file)
     
-    # Pega o layout do primeiro slide como base para os novos slides
-    slide_layout = prs.slide_layouts[0] 
+    # O primeiro slide (índice 0) é o nosso modelo mestre
+    template_slide = prs.slides[0]
+    
+    # O layout do slide modelo
+    slide_layout = template_slide.slide_layout
 
+    # Remove o slide modelo original da apresentação final.
+    # Fazemos isso pegando o elemento XML e depois removendo o slide.
+    slide_id = prs.slides.index(template_slide)
+    rId = prs.slides._sldIdLst[slide_id].rId
+    prs.part.drop_rel(rId)
+    del prs.slides._sldIdLst[slide_id]
+
+    # Para cada equipe, criamos um novo slide e copiamos o conteúdo
     for team in team_data:
-        slide = prs.slides.add_slide(slide_layout)
+        new_slide = prs.slides.add_slide(slide_layout)
+        
+        # Copia as formas do slide modelo para o novo slide
+        for shape in template_slide.shapes:
+            new_el = deepcopy(shape.element)
+            new_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
 
-        # Itera sobre todas as formas do slide para encontrar e substituir as tags
-        for shape in slide.shapes:
-            if not shape.has_text_frame:
-                continue
+        # Agora, com o slide copiado, fazemos a substituição do texto
+        for shape in new_slide.shapes:
+            text_replacer(shape, team)
             
-            # Itera sobre todas as chaves (tags) que precisamos substituir
-            for key, value in team.items():
-                if key in shape.text:
-                    text_frame = shape.text_frame
-                    for paragraph in text_frame.paragraphs:
-                        for run in paragraph.runs:
-                            # Substitui a tag pelo valor
-                            run.text = run.text.replace(key, value)
     return prs
 
-# === Interface Streamlit (Simplificada e Final) ===
+
+# === Interface Streamlit (sem alterações) ===
 
 st.set_page_config(layout="wide")
 st.title("🚀 Gerador Automático de Slides")
 st.info("Faça o upload da tabela de dados e do modelo de PowerPoint para gerar a apresentação final.")
 
 st.header("1. Carregue os Arquivos")
-st.write("Certifique-se que o arquivo de modelo `.pptx` (baixado do Google Slides) contém as tags de texto, como `{{NOME_LIDER}}`.")
+st.write("Certifique-se que o arquivo de modelo `.pptx` contém **apenas um slide** com as tags de texto, como `{{NOME_LIDER}}`.")
 
 uploaded_data_file = st.file_uploader("Arquivo .docx com a TABELA DE DADOS", type=["docx"])
 uploaded_template_file = st.file_uploader("Arquivo .pptx com o MODELO DE SLIDE", type=["pptx"])
@@ -129,7 +167,7 @@ if st.button("✨ Gerar Slides!", use_container_width=True):
 
             except Exception as e:
                 st.error(f"Ocorreu um erro: {e}")
-                st.error("Dica: Verifique se a tabela no arquivo .docx está correta e se as tags no modelo .pptx estão escritas corretamente (ex: `{{NOME_EQUIPE}}`).")
+                st.error("Dica: Verifique se o seu .pptx tem apenas um slide e se as tags estão escritas corretamente (ex: `{{NOME_EQUIPE}}`).")
     else:
         st.warning("Por favor, carregue os dois arquivos.")
 
