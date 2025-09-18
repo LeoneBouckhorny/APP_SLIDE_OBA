@@ -5,177 +5,139 @@ from collections import defaultdict
 from io import BytesIO
 from copy import deepcopy
 
-# === Funções de Processamento de Dados (sem o campo "Medalha") ===
+# === Funções Utilitárias ===
 def formatar_texto(texto, maiusculo_estado=False):
-    """Formata uma string, capitalizando palavras e tratando o estado."""
+    """Capitaliza nomes e coloca estados em maiúsculo."""
     texto = ' '.join(texto.strip().split())
-    if maiusculo_estado:
-        return texto.upper()
-    return ' '.join(w.capitalize() for w in texto.split())
+    return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
 
-def extrair_e_estruturar_dados(uploaded_file):
-    """Lê a tabela de um arquivo .docx e retorna uma lista de dicionários para cada equipe."""
+def extrair_dados(uploaded_file):
+    """
+    Lê o DOCX e retorna uma lista de equipes ordenadas pelo 'Valido'.
+    Ignora a coluna Medalhas.
+    """
     doc = Document(uploaded_file)
-    dados_brutos = []
-    
-    if not doc.tables:
-        st.error("Nenhuma tabela encontrada no arquivo DOCX.")
-        return None
+    registros = []
 
     for tabela in doc.tables:
         for i, linha in enumerate(tabela.rows):
-            if i == 0: continue
-            
-            valores = [c.text.strip() for c in linha.cells]
-            if len(valores) >= 8:
-                # O campo "medalha" é lido mas não será usado
-                medalha, valido, equipe, funcao, escola, cidade, estado, nome = valores[:8]
-                dados_brutos.append({
-                    "Valido": valido, "Equipe": equipe, "Funcao": funcao.lower(),
-                    "Escola": escola, "Cidade": cidade, "Estado": estado, "Nome": nome
+            if i == 0:
+                continue
+            celulas = [c.text.strip() for c in linha.cells]
+            if len(celulas) >= 8:
+                _, valido, equipe, funcao, escola, cidade, estado, nome = celulas[:8]
+                registros.append({
+                    "Valido": valido,
+                    "Equipe": equipe,
+                    "Funcao": funcao.lower(),
+                    "Escola": escola,
+                    "Cidade": cidade,
+                    "Estado": estado,
+                    "Nome": nome
                 })
 
+    # Agrupar por equipe
     equipes = defaultdict(list)
-    for item in dados_brutos:
-        equipes[item["Equipe"]].append(item)
+    for r in registros:
+        equipes[r["Equipe"]].append(r)
 
-    def valor_valido(membros):
+    # Ordenar equipes por lancamentos válidos (crescente)
+    def chave_ordem(membros):
         try:
-            return float(membros[0]['Valido'].replace(',', '.'))
-        except (ValueError, IndexError):
-            return float('inf')
+            return float(membros[0]["Valido"].replace(",", "."))
+        except:
+            return float("inf")
 
-    equipes_ordenadas = sorted(equipes.items(), key=lambda x: valor_valido(x[1]))
+    equipes_ordenadas = sorted(equipes.items(), key=lambda x: chave_ordem(x[1]))
 
-    dados_finais_para_slides = []
+    # Montar dados finais para slides
+    dados_finais = []
     for equipe_nome, membros in equipes_ordenadas:
-        lider_obj = [m for m in membros if "líder" in m["Funcao"] or "lider" in m["Funcao"]]
-        acompanhante_obj = [m for m in membros if "acompanhante" in m["Funcao"]]
-        alunos_obj = sorted([m for m in membros if "aluno" in m["Funcao"]], key=lambda m: formatar_texto(m["Nome"]))
+        lider = [m for m in membros if "líder" in m["Funcao"] or "lider" in m["Funcao"]]
+        acompanhante = [m for m in membros if "acompanhante" in m["Funcao"]]
+        alunos = sorted(
+            [m for m in membros if "aluno" in m["Funcao"]],
+            key=lambda m: formatar_texto(m["Nome"])
+        )
 
-        nome_lider = formatar_texto(lider_obj[0]["Nome"]) if lider_obj else ""
-        nome_acompanhante = formatar_texto(acompanhante_obj[0]["Nome"]) if acompanhante_obj else ""
-        nomes_alunos = "\n".join([formatar_texto(m["Nome"]) for m in alunos_obj])
+        blocos_nomes = []
+        if lider: blocos_nomes.append(formatar_texto(lider[0]["Nome"]))
+        if acompanhante: blocos_nomes.append(formatar_texto(acompanhante[0]["Nome"]))
+        blocos_nomes.extend(formatar_texto(a["Nome"]) for a in alunos)
 
-        if membros:
-            info_geral = membros[0]
-            # Dicionário final sem a chave da medalha
-            dados_finais_para_slides.append({
-                "{{NOME_LIDER}}": nome_lider,
-                "{{NOME_ACOMPANHANTE}}": nome_acompanhante,
-                "{{NOMES_ALUNOS}}": nomes_alunos,
-                "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
-                "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info_geral['Valido']} m",
-                "{{NOME_ESCOLA}}": formatar_texto(info_geral["Escola"]),
-                "{{CIDADE_UF}}": f"{formatar_texto(info_geral['Cidade'])} / {formatar_texto(info_geral['Estado'], maiusculo_estado=True)}",
-            })
-    return dados_finais_para_slides
+        info = membros[0]
+        dados_finais.append({
+            "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info['Valido']} m",
+            "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
+            "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
+            "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
+            "{{NOME_LIDER}}": formatar_texto(lider[0]["Nome"]) if lider else "",
+            "{{NOME_ACOMPANHANTE}}": formatar_texto(acompanhante[0]["Nome"]) if acompanhante else "",
+            "{{NOMES_ALUNOS}}": "\n".join(blocos_nomes[2:] if lider or acompanhante else blocos_nomes)
+        })
+    return dados_finais
 
-# === Funções de Geração de PowerPoint (Lógica Estável) ===
-
-def replace_text_in_shape(shape, team_data):
-    """Substitui as tags de texto em uma forma específica."""
+def substituir_texto(shape, dados_time):
     if not shape.has_text_frame:
         return
+    tf = shape.text_frame
+    for p in tf.paragraphs:
+        texto = "".join(run.text for run in p.runs)
+        for chave, valor in dados_time.items():
+            texto = texto.replace(chave, valor)
+        for _ in p.runs:
+            p._p.remove(p.runs[0]._r)
+        p.add_run().text = texto
 
-    text_frame = shape.text_frame
-    for paragraph in text_frame.paragraphs:
-        full_text = "".join(run.text for run in paragraph.runs)
-        
-        for key, value in team_data.items():
-            if key in full_text:
-                full_text = full_text.replace(key, value)
-        
-        # Limpa os 'runs' antigos e adiciona um novo com o texto completo
-        while len(paragraph.runs) > 0:
-            p = paragraph._p
-            p.remove(paragraph.runs[0]._r)
-        
-        paragraph.add_run().text = full_text
+def duplicar_slide(prs, indice):
+    template = prs.slides[indice]
+    layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[-1]
+    novo = prs.slides.add_slide(layout)
+    for s in template.shapes:
+        novo.shapes._spTree.insert_element_before(deepcopy(s.element), 'p:extLst')
+    return novo
 
-def duplicate_slide(prs, index):
-    """Duplica um slide e o adiciona no final da apresentação."""
-    template = prs.slides[index]
-    try:
-        blank_slide_layout = prs.slide_layouts[6]
-    except IndexError:
-        blank_slide_layout = prs.slide_layouts[len(prs.slide_layouts) - 1]
-
-    copied_slide = prs.slides.add_slide(blank_slide_layout)
-
-    for shape in template.shapes:
-        new_el = deepcopy(shape.element)
-        copied_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
-    
-    return copied_slide
-
-def generate_presentation(team_data, template_file):
-    """Gera a apresentação final."""
+def gerar_apresentacao(dados, template_file):
     prs = Presentation(template_file)
-    
-    if not team_data or not prs.slides:
-        return prs # Retorna a apresentação vazia se não houver dados ou slides
-
-    # Modifica o primeiro slide para a primeira equipe
-    first_slide = prs.slides[0]
-    first_team = team_data[0]
-    for shape in first_slide.shapes:
-        replace_text_in_shape(shape, first_team)
-
-    # Para as equipes restantes, duplica o primeiro slide e modifica a cópia
-    for i in range(1, len(team_data)):
-        team = team_data[i]
-        new_slide = duplicate_slide(prs, 0)
-        for shape in new_slide.shapes:
-            replace_text_in_shape(shape, team)
-            
+    if not dados or not prs.slides:
+        return prs
+    # Primeiro slide
+    for s in prs.slides[0].shapes:
+        substituir_texto(s, dados[0])
+    # Restantes
+    for d in dados[1:]:
+        novo = duplicar_slide(prs, 0)
+        for s in novo.shapes:
+            substituir_texto(s, d)
     return prs
 
 # === Interface Streamlit ===
-
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides")
-st.info("Faça o upload da tabela de dados e do modelo de PowerPoint para gerar a apresentação final.")
+st.title("🚀 Gerador Automático de Slides – Versão Final")
+st.info("Envie o DOCX com as equipes e o PPTX modelo para gerar os slides.")
 
-st.header("1. Carregue os Arquivos")
-st.write("Certifique-se que o arquivo de modelo `.pptx` contém **apenas um slide** com as tags de texto, como `{{NOME_LIDER}}`.")
+docx_file = st.file_uploader("📄 Envie o DOCX de dados", type=["docx"])
+pptx_file = st.file_uploader("📊 Envie o PPTX modelo", type=["pptx"])
 
-uploaded_data_file = st.file_uploader("Arquivo .docx com a TABELA DE DADOS", type=["docx"])
-uploaded_template_file = st.file_uploader("Arquivo .pptx com o MODELO DE SLIDE", type=["pptx"])
-
-st.divider()
-
-st.header("2. Gere a Apresentação")
-if st.button("✨ Gerar Slides!", use_container_width=True):
-    if uploaded_data_file and uploaded_template_file:
-        with st.spinner("Construindo Foguetes... 🚀 Processando dados e montando a apresentação..."):
-            try:
-                teams_data = extrair_e_estruturar_dados(uploaded_data_file)
-                
-                if teams_data:
-                    presentation = generate_presentation(teams_data, uploaded_template_file)
-
-                    pptx_buffer = BytesIO()
-                    presentation.save(pptx_buffer)
-                    pptx_buffer.seek(0)
-                    
-                    st.session_state.pptx_buffer = pptx_buffer
-                    st.session_state.generation_complete = True
-                    st.success(f"Apresentação com {len(teams_data)} slides gerada com sucesso!")
-                else:
-                    st.warning("Não foi possível gerar os slides. Verifique o arquivo de dados.")
-
-            except Exception as e:
-                st.error(f"Ocorreu um erro: {e}")
-                st.error("Dica: Verifique se o seu .pptx tem apenas um slide e se as tags estão escritas corretamente (ex: `{{NOME_EQUIPE}}`).")
+if st.button("✨ Gerar Apresentação"):
+    if docx_file and pptx_file:
+        try:
+            dados = extrair_dados(docx_file)
+            if dados:
+                prs = gerar_apresentacao(dados, pptx_file)
+                buf = BytesIO()
+                prs.save(buf)
+                buf.seek(0)
+                st.success(f"Gerado {len(dados)} slides!")
+                st.download_button(
+                    label="📥 Baixar Apresentação Final",
+                    data=buf,
+                    file_name="Apresentacao_Final_Equipes.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                )
+            else:
+                st.warning("Nenhum dado válido encontrado no DOCX.")
+        except Exception as e:
+            st.error(f"Erro: {e}")
     else:
-        st.warning("Por favor, carregue os dois arquivos.")
-
-if 'generation_complete' in st.session_state and st.session_state.generation_complete:
-    st.download_button(
-        label="📥 Baixar Apresentação Final",
-        data=st.session_state.pptx_buffer,
-        file_name="Apresentacao_Final_Equipes.pptx",
-        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        use_container_width=True
-    )
+        st.warning("Envie os dois arquivos para continuar.")
