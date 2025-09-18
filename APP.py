@@ -6,6 +6,9 @@ from collections import defaultdict
 from copy import deepcopy
 from io import BytesIO
 from lxml import etree
+from pptx.util import Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
 
 # -------------------- UTILITÁRIOS --------------------
 def formatar_texto(texto, maiusculo_estado=False):
@@ -94,19 +97,54 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 def replace_placeholders_in_shape(shape, team_data):
+def replace_placeholders_in_shape(shape, team_data):
+    """Substitui placeholders, aplica formatação, alinhamento e espaçamento."""
     if not shape.has_text_frame:
         return
+
     for paragraph in shape.text_frame.paragraphs:
         full_text = "".join(run.text for run in paragraph.runs)
-        new_text = full_text
-        for k, v in team_data.items():
-            if k in new_text:
-                new_text = new_text.replace(k, v)
-        if new_text != full_text:
-            while paragraph.runs:
-                paragraph._p.remove(paragraph.runs[0]._r)
-            paragraph.add_run().text = new_text
+        selected_key = None
+        for k in team_data.keys():
+            if k in full_text:
+                selected_key = k
+                break
+        if not selected_key:
+            continue
 
+        new_text = full_text.replace(selected_key, team_data[selected_key])
+
+        # limpa runs antigos
+        while paragraph.runs:
+            paragraph._p.remove(paragraph.runs[0]._r)
+
+        run = paragraph.add_run()
+        run.text = new_text
+
+        # --- aplicar estilo ---
+        font = run.font
+        font.name = "Lexend"
+        font.bold = True  # Medium ≈ bold
+
+        if selected_key == "{{LANCAMENTOS_VALIDOS}}":
+            font.size = Pt(25.5)
+            font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)  # #006FC0
+        elif selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
+            font.size = Pt(19.5)
+            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        elif selected_key == "{{NOME_EQUIPE}}":
+            font.size = Pt(15)
+            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+            font.size = Pt(16.5)
+            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        else:
+            font.size = Pt(18)
+            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        # --- alinhamento e espaçamento ---
+        paragraph.alignment = PP_ALIGN.CENTER   # centralizado
+        paragraph.line_spacing = 1.2            # espaçamento de linha
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
     if not dados or not prs.slides:
@@ -156,3 +194,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
