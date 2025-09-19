@@ -2,13 +2,14 @@ import streamlit as st
 from docx import Document
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.text import PP_ALIGN
+from pptx.util import Pt
+from pptx.dml.color import RGBColor
 from collections import defaultdict
 from copy import deepcopy
 from io import BytesIO
 from lxml import etree
-from pptx.util import Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
+import re
 
 # -------------------- UTILITÁRIOS --------------------
 def formatar_texto(texto, maiusculo_estado=False):
@@ -16,7 +17,6 @@ def formatar_texto(texto, maiusculo_estado=False):
     return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
 
 def extrair_dados(uploaded_file):
-    """Extrai e ordena dados do DOCX (ignora coluna Medalha)."""
     doc = Document(uploaded_file)
     registros = []
     for tabela in doc.tables:
@@ -73,9 +73,6 @@ def extrair_dados(uploaded_file):
     return dados_finais
 
 def duplicate_slide_with_media(prs, source_slide):
-    """
-    Duplicar slide preservando imagens.
-    """
     layout = source_slide.slide_layout
     new_slide = prs.slides.add_slide(layout)
     for shape in source_slide.shapes:
@@ -112,50 +109,62 @@ def replace_placeholders_in_shape(shape, team_data):
             continue
 
         new_text = full_text.replace(selected_key, team_data[selected_key])
-
-        # limpa runs antigos
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-        run = paragraph.add_run()
-        run.text = new_text
-
-        # --- aplicar estilo ---
-        font = run.font
-        font.name = "Lexend"
-        font.bold = True  # Medium ≈ bold
-
+        # Tratamento especial para LANCAMENTOS_VALIDOS com negrito parcial
         if selected_key == "{{LANCAMENTOS_VALIDOS}}":
-            font.size = Pt(25.5)
-            font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)  # #006FC0
-        elif selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
-            font.size = Pt(19.5)
-            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        elif selected_key == "{{NOME_EQUIPE}}":
-            font.size = Pt(15)
-            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
-            font.size = Pt(16.5)
-            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        else:
-            font.size = Pt(18)
-            font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            # Divide: prefixo "ALCANCE:" normal e numero+m em bold
+            match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
+            if match:
+                prefix, valor = match.groups()
+                run1 = paragraph.add_run()
+                run1.text = prefix
+                run1.font.name = "Lexend"
+                run1.font.bold = False
+                run1.font.size = Pt(25.5)
+                run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
-        # --- alinhamento e espaçamento ---
-        paragraph.alignment = PP_ALIGN.CENTER   # centralizado
-        paragraph.line_spacing = 1.2            # espaçamento de linha
+                run2 = paragraph.add_run()
+                run2.text = valor
+                run2.font.name = "Lexend"
+                run2.font.bold = True
+                run2.font.size = Pt(25.5)
+                run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+            else:
+                run = paragraph.add_run()
+                run.text = new_text
+                run.font.name = "Lexend"
+                run.font.bold = True
+                run.font.size = Pt(25.5)
+                run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+        else:
+            run = paragraph.add_run()
+            run.text = new_text
+            run.font.name = "Lexend"
+            run.font.bold = True
+            if selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
+                run.font.size = Pt(19.5)
+            elif selected_key == "{{NOME_EQUIPE}}":
+                run.font.size = Pt(15)
+            elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+                run.font.size = Pt(16.5)
+            else:
+                run.font.size = Pt(18)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        paragraph.alignment = PP_ALIGN.CENTER
+        paragraph.line_spacing = 1.2
+
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
     if not dados or not prs.slides:
         return prs
 
     modelo = prs.slides[0]
-
-    # 1️⃣ DUPLICAR PRIMEIRO
     for _ in range(len(dados) - 1):
         duplicate_slide_with_media(prs, modelo)
 
-    # 2️⃣ PREENCHER TODOS
     for slide, team in zip(prs.slides, dados):
         for shape in slide.shapes:
             replace_placeholders_in_shape(shape, team)
@@ -164,8 +173,8 @@ def gerar_apresentacao(dados, template_stream):
 
 # -------------------- STREAMLIT APP --------------------
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides - Versão Corrigida")
-st.info("Envie o DOCX com as equipes (ignora Medalhas) e o PPTX modelo com placeholders.")
+st.title("🚀 Gerador Automático de Slides - Negrito Parcial")
+st.info("Envie o DOCX e o PPTX modelo com placeholders formatados.")
 
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
@@ -193,5 +202,3 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
-
