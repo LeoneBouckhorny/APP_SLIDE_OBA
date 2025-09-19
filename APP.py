@@ -55,10 +55,14 @@ def extrair_dados(uploaded_file):
         alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
                         key=lambda m: formatar_texto(m["Nome"]))
 
+        # Montar blocos: líder e acompanhante primeiro, depois alunos
         blocos = []
-        if lider: blocos.append(formatar_texto(lider[0]["Nome"]))
-        if acompanhante: blocos.append(formatar_texto(acompanhante[0]["Nome"]))
-        blocos += [formatar_texto(a["Nome"]) for a in alunos]
+        if lider:
+            blocos.append(formatar_texto(lider[0]["Nome"]))
+        if acompanhante:
+            blocos.append(formatar_texto(acompanhante[0]["Nome"]))
+        # todos os alunos (1 a 3) entram logo após, sem pular linhas extras
+        nomes_alunos = "\n".join(formatar_texto(a["Nome"]) for a in alunos)
 
         info = membros[0]
         dados_finais.append({
@@ -68,7 +72,7 @@ def extrair_dados(uploaded_file):
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
             "{{NOME_LIDER}}": formatar_texto(lider[0]["Nome"]) if lider else "",
             "{{NOME_ACOMPANHANTE}}": formatar_texto(acompanhante[0]["Nome"]) if acompanhante else "",
-            "{{NOMES_ALUNOS}}": "\n".join(blocos[(2 if (lider or acompanhante) else 0):])
+            "{{NOMES_ALUNOS}}": nomes_alunos
         })
     return dados_finais
 
@@ -94,7 +98,6 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 def replace_placeholders_in_shape(shape, team_data):
-    """Substitui placeholders, aplica formatação, alinhamento e espaçamento."""
     if not shape.has_text_frame:
         return
 
@@ -127,6 +130,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.text = valor
                 run2.font.name = "Lexend"
                 run2.font.bold = True
+                run2.font.underline = True
                 run2.font.size = Pt(28)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
             else:
@@ -134,6 +138,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.text = new_text
                 run.font.name = "Lexend"
                 run.font.bold = True
+                run.font.underline = True
                 run.font.size = Pt(28)
                 run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
         else:
@@ -173,8 +178,8 @@ def gerar_apresentacao(dados, template_stream):
 
 # -------------------- STREAMLIT APP --------------------
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides - Fontes Ajustadas")
-st.info("Envie o DOCX e o PPTX modelo com placeholders formatados.")
+st.title("🚀 Gerador Automático de Slides - Correção Alunos")
+st.info("Envie o DOCX e o PPTX modelo. Corrige alunos faltantes e remove linha extra quando não há acompanhante.")
 
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
