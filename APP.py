@@ -55,13 +55,16 @@ def extrair_dados(uploaded_file):
         alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
                         key=lambda m: formatar_texto(m["Nome"]))
 
-        # Montar blocos: líder e acompanhante primeiro, depois alunos
+        # Montar blocos de nomes
+        nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
+        nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
+        # Apenas adiciona acompanhante se existir
         blocos = []
-        if lider:
-            blocos.append(formatar_texto(lider[0]["Nome"]))
-        if acompanhante:
-            blocos.append(formatar_texto(acompanhante[0]["Nome"]))
-        # todos os alunos (1 a 3) entram logo após, sem pular linhas extras
+        if nomes_lider:
+            blocos.append(nomes_lider)
+        if nomes_acompanhante:
+            blocos.append(nomes_acompanhante)
+
         nomes_alunos = "\n".join(formatar_texto(a["Nome"]) for a in alunos)
 
         info = membros[0]
@@ -70,8 +73,8 @@ def extrair_dados(uploaded_file):
             "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
             "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
-            "{{NOME_LIDER}}": formatar_texto(lider[0]["Nome"]) if lider else "",
-            "{{NOME_ACOMPANHANTE}}": formatar_texto(acompanhante[0]["Nome"]) if acompanhante else "",
+            "{{NOME_LIDER}}": nomes_lider,
+            "{{NOME_ACOMPANHANTE}}": nomes_acompanhante,
             "{{NOMES_ALUNOS}}": nomes_alunos
         })
     return dados_finais
@@ -123,7 +126,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run1.text = prefix
                 run1.font.name = "Lexend"
                 run1.font.bold = False
-                run1.font.size = Pt(28)
+                run1.font.size = Pt(35)
                 run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
                 run2 = paragraph.add_run()
@@ -131,7 +134,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.name = "Lexend"
                 run2.font.bold = True
                 run2.font.underline = True
-                run2.font.size = Pt(28)
+                run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
             else:
                 run = paragraph.add_run()
@@ -139,7 +142,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.font.name = "Lexend"
                 run.font.bold = True
                 run.font.underline = True
-                run.font.size = Pt(28)
+                run.font.size = Pt(35)
                 run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
         else:
             run = paragraph.add_run()
@@ -159,7 +162,7 @@ def replace_placeholders_in_shape(shape, team_data):
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
         paragraph.alignment = PP_ALIGN.CENTER
-        paragraph.line_spacing = 1.2
+        paragraph.line_spacing = None  # single spacing
 
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
@@ -178,8 +181,8 @@ def gerar_apresentacao(dados, template_stream):
 
 # -------------------- STREAMLIT APP --------------------
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides - Correção Alunos")
-st.info("Envie o DOCX e o PPTX modelo. Corrige alunos faltantes e remove linha extra quando não há acompanhante.")
+st.title("🚀 Gerador Automático de Slides - Ajustes Finais")
+st.info("Removida linha vazia sem acompanhante, fonte 35 para alcance e espaçamento single.")
 
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
