@@ -122,21 +122,21 @@ def replace_placeholders_in_shape(shape, team_data):
                 run1.text = prefix
                 run1.font.name = "Lexend"
                 run1.font.bold = False
-                run1.font.size = Pt(25.5)
+                run1.font.size = Pt(28)
                 run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
                 run2 = paragraph.add_run()
                 run2.text = valor
                 run2.font.name = "Lexend"
                 run2.font.bold = True
-                run2.font.size = Pt(25.5)
+                run2.font.size = Pt(28)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
             else:
                 run = paragraph.add_run()
                 run.text = new_text
                 run.font.name = "Lexend"
                 run.font.bold = True
-                run.font.size = Pt(25.5)
+                run.font.size = Pt(28)
                 run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
         else:
             run = paragraph.add_run()
@@ -144,11 +144,11 @@ def replace_placeholders_in_shape(shape, team_data):
             run.font.name = "Lexend"
             run.font.bold = True
             if selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
-                run.font.size = Pt(19.5)
+                run.font.size = Pt(26,5)
             elif selected_key == "{{NOME_EQUIPE}}":
-                run.font.size = Pt(15)
+                run.font.size = Pt(20)
             elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
-                run.font.size = Pt(16.5)
+                run.font.size = Pt(20)
             else:
                 run.font.size = Pt(18)
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
@@ -202,3 +202,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
