@@ -54,32 +54,33 @@ def extrair_dados(uploaded_file):
         alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
                         key=lambda m: formatar_texto(m["Nome"]))
 
-        nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
-        nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
+        nome_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
+        nome_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
 
-        blocos = []
-        if nomes_lider:
-            blocos.append(nomes_lider)
-        if nomes_acompanhante:
-            blocos.append(nomes_acompanhante)
+        # Monta a sequência de nomes na ordem correta
+        linhas_nomes = []
+        if nome_lider:
+            linhas_nomes.append(nome_lider)
+        if nome_acompanhante:
+            linhas_nomes.append(nome_acompanhante)
+        # Se não houver acompanhante, os alunos começam logo abaixo do líder
+        linhas_nomes += [formatar_texto(a["Nome"]) for a in alunos]
 
-        nomes_alunos = "\n".join(formatar_texto(a["Nome"]) for a in alunos)
+        # Quebra apenas entre cada nome
+        nomes_formatados = "\n".join(linhas_nomes)
 
         info = membros[0]
-        equipe_dict = {
+        dados_finais.append({
             "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info['Valido']} m",
             "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
             "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
-            "{{NOME_LIDER}}": nomes_lider,
-            "{{NOMES_ALUNOS}}": nomes_alunos
-        }
-        if nomes_acompanhante:  # só adiciona se houver
-            equipe_dict["{{NOME_ACOMPANHANTE}}"] = nomes_acompanhante
-
-        dados_finais.append(equipe_dict)
+            "{{NOME_LIDER}}": "",  # Não usamos mais separadamente
+            "{{NOME_ACOMPANHANTE}}": "",  # Não usamos mais separadamente
+            "{{NOMES_ALUNOS}}": nomes_formatados
+        })
     return dados_finais
-
+    
 def duplicate_slide_with_media(prs, source_slide):
     layout = source_slide.slide_layout
     new_slide = prs.slides.add_slide(layout)
@@ -211,3 +212,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
