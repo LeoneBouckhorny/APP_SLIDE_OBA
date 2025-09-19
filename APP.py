@@ -11,7 +11,6 @@ from io import BytesIO
 from lxml import etree
 import re
 
-# -------------------- UTILITÁRIOS --------------------
 def formatar_texto(texto, maiusculo_estado=False):
     texto = ' '.join(texto.strip().split())
     return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
@@ -55,10 +54,9 @@ def extrair_dados(uploaded_file):
         alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
                         key=lambda m: formatar_texto(m["Nome"]))
 
-        # Montar blocos de nomes
         nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
         nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
-        # Apenas adiciona acompanhante se existir
+
         blocos = []
         if nomes_lider:
             blocos.append(nomes_lider)
@@ -68,15 +66,18 @@ def extrair_dados(uploaded_file):
         nomes_alunos = "\n".join(formatar_texto(a["Nome"]) for a in alunos)
 
         info = membros[0]
-        dados_finais.append({
+        equipe_dict = {
             "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info['Valido']} m",
             "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
             "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
             "{{NOME_LIDER}}": nomes_lider,
-            "{{NOME_ACOMPANHANTE}}": nomes_acompanhante,
             "{{NOMES_ALUNOS}}": nomes_alunos
-        })
+        }
+        if nomes_acompanhante:  # só adiciona se houver
+            equipe_dict["{{NOME_ACOMPANHANTE}}"] = nomes_acompanhante
+
+        dados_finais.append(equipe_dict)
     return dados_finais
 
 def duplicate_slide_with_media(prs, source_slide):
@@ -126,7 +127,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run1.text = prefix
                 run1.font.name = "Lexend"
                 run1.font.bold = False
-                run1.font.size = Pt(35)
+                run1.font.size = Pt(28)  # ALCANCE com 28 pt
                 run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
                 run2 = paragraph.add_run()
@@ -134,7 +135,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.name = "Lexend"
                 run2.font.bold = True
                 run2.font.underline = True
-                run2.font.size = Pt(35)
+                run2.font.size = Pt(35)  # número + m com 35 pt
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
             else:
                 run = paragraph.add_run()
@@ -181,8 +182,8 @@ def gerar_apresentacao(dados, template_stream):
 
 # -------------------- STREAMLIT APP --------------------
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides - Ajustes Finais")
-st.info("Removida linha vazia sem acompanhante, fonte 35 para alcance e espaçamento single.")
+st.title("🚀 Gerador Automático de Slides")
+st.info("Espero que ajude")
 
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
