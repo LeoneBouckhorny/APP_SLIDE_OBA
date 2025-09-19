@@ -112,9 +112,7 @@ def replace_placeholders_in_shape(shape, team_data):
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-        # Tratamento especial para LANCAMENTOS_VALIDOS com negrito parcial
         if selected_key == "{{LANCAMENTOS_VALIDOS}}":
-            # Divide: prefixo "ALCANCE:" normal e numero+m em bold
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
             if match:
                 prefix, valor = match.groups()
@@ -143,14 +141,16 @@ def replace_placeholders_in_shape(shape, team_data):
             run.text = new_text
             run.font.name = "Lexend"
             run.font.bold = True
+
             if selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
-                run.font.size = Pt(26,5)
+                run.font.size = Pt(26.5)
             elif selected_key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
             elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
                 run.font.size = Pt(20)
             else:
                 run.font.size = Pt(18)
+
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
         paragraph.alignment = PP_ALIGN.CENTER
@@ -173,7 +173,7 @@ def gerar_apresentacao(dados, template_stream):
 
 # -------------------- STREAMLIT APP --------------------
 st.set_page_config(layout="wide")
-st.title("🚀 Gerador Automático de Slides - Negrito Parcial")
+st.title("🚀 Gerador Automático de Slides - Fontes Ajustadas")
 st.info("Envie o DOCX e o PPTX modelo com placeholders formatados.")
 
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
@@ -202,4 +202,3 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
