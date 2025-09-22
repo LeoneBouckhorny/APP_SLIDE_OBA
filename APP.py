@@ -11,6 +11,16 @@ from io import BytesIO
 from lxml import etree
 import re
 
+# ---------- CONFIGURAÇÃO INICIAL ----------
+st.set_page_config(layout="wide")
+
+# Exibe a logo no topo
+st.image("logo_jornada.png", use_container_width=True)
+
+st.title("🚀 Gerador Automático de Slides - Com GIF")
+st.info("Inclui logo no topo e GIF exibido após gerar os slides.")
+
+# -------------------- FUNÇÕES AUXILIARES --------------------
 def formatar_texto(texto, maiusculo_estado=False):
     texto = ' '.join(texto.strip().split())
     return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
@@ -54,19 +64,16 @@ def extrair_dados(uploaded_file):
         alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
                         key=lambda m: formatar_texto(m["Nome"]))
 
-        nome_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
-        nome_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
+        nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
+        nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
 
-        # Monta a sequência de nomes na ordem correta
         linhas_nomes = []
-        if nome_lider:
-            linhas_nomes.append(nome_lider)
-        if nome_acompanhante:
-            linhas_nomes.append(nome_acompanhante)
-        # Se não houver acompanhante, os alunos começam logo abaixo do líder
+        if nomes_lider:
+            linhas_nomes.append(nomes_lider)
+        if nomes_acompanhante:
+            linhas_nomes.append(nomes_acompanhante)
         linhas_nomes += [formatar_texto(a["Nome"]) for a in alunos]
 
-        # Quebra apenas entre cada nome
         nomes_formatados = "\n".join(linhas_nomes)
 
         info = membros[0]
@@ -75,12 +82,10 @@ def extrair_dados(uploaded_file):
             "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
             "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
-            "{{NOME_LIDER}}": "",  # Não usamos mais separadamente
-            "{{NOME_ACOMPANHANTE}}": "",  # Não usamos mais separadamente
             "{{NOMES_ALUNOS}}": nomes_formatados
         })
     return dados_finais
-    
+
 def duplicate_slide_with_media(prs, source_slide):
     layout = source_slide.slide_layout
     new_slide = prs.slides.add_slide(layout)
@@ -128,7 +133,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run1.text = prefix
                 run1.font.name = "Lexend"
                 run1.font.bold = False
-                run1.font.size = Pt(28)  # ALCANCE com 28 pt
+                run1.font.size = Pt(28)
                 run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
                 run2 = paragraph.add_run()
@@ -136,7 +141,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.name = "Lexend"
                 run2.font.bold = True
                 run2.font.underline = True
-                run2.font.size = Pt(35)  # número + m com 35 pt
+                run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
             else:
                 run = paragraph.add_run()
@@ -152,7 +157,7 @@ def replace_placeholders_in_shape(shape, team_data):
             run.font.name = "Lexend"
             run.font.bold = True
 
-            if selected_key in ("{{NOME_LIDER}}", "{{NOME_ACOMPANHANTE}}", "{{NOMES_ALUNOS}}"):
+            if selected_key in ("{{NOMES_ALUNOS}}",):
                 run.font.size = Pt(26.5)
             elif selected_key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
@@ -181,12 +186,7 @@ def gerar_apresentacao(dados, template_stream):
 
     return prs
 
-# -------------------- STREAMLIT APP --------------------
-st.set_page_config(layout="wide")
-st.image("logo_jornada.png", use_container_width=True)
-st.title("🚀 Gerador Automático de Slides")
-st.info("Espero que ajude")
-
+# -------------------- INTERFACE STREAMLIT --------------------
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
 
@@ -204,6 +204,10 @@ if st.button("✨ Gerar Apresentação"):
                 prs_final.save(buf)
                 buf.seek(0)
                 st.success(f"Slides gerados: {len(dados)}")
+
+                # Mostra o GIF animado após gerar os slides
+                st.image("foguete.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
+
                 st.download_button(
                     "📥 Baixar Apresentação Final",
                     data=buf,
@@ -213,6 +217,3 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
-
-
