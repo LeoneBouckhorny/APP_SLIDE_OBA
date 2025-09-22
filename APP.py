@@ -17,8 +17,8 @@ st.set_page_config(layout="wide")
 # Exibe a logo no topo
 st.image("logo_jornada.png", use_container_width=True)
 
-st.title("🚀 Gerador Automático de Slides - Com GIF")
-st.info("Inclui logo no topo e GIF exibido após gerar os slides.")
+st.title("🚀 Gerador Automático de Slides.")
+st.info("certifique-se que esta upando os arquivos corretos!")
 
 # -------------------- FUNÇÕES AUXILIARES --------------------
 def formatar_texto(texto, maiusculo_estado=False):
@@ -217,4 +217,5 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
