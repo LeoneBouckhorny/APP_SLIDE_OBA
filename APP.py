@@ -18,7 +18,7 @@ st.set_page_config(layout="wide")
 st.image("logo_jornada.png", use_container_width=True)
 
 st.title("🚀 Gerador Automático de Slides.")
-st.info("certifique-se que esta upando os arquivos corretos!")
+st.info("Certifique-se que está upando os arquivos corretos!")
 
 # -------------------- FUNÇÕES AUXILIARES --------------------
 def formatar_texto(texto, maiusculo_estado=False):
@@ -217,5 +217,6 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
