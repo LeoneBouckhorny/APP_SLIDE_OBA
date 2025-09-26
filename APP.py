@@ -24,6 +24,17 @@ dark_css = """
 h1, h2, h3, h4, h5, h6, p, span, div {
     color: white !important;
 }
+section[data-testid="stFileUploader"] div {
+    background-color: #1E1E1E !important;
+    border: 1px solid #444 !important;
+    border-radius: 10px !important;
+    color: white !important;
+}
+button[kind="primary"] {
+    background-color: #006FC0 !important;
+    color: white !important;
+    border-radius: 8px !important;
+}
 </style>
 """
 
@@ -36,8 +47,20 @@ light_css = """
 h1, h2, h3, h4, h5, h6, p, span, div {
     color: black !important;
 }
+section[data-testid="stFileUploader"] div {
+    background-color: #F7F7F7 !important;
+    border: 1px solid #DDD !important;
+    border-radius: 10px !important;
+    color: black !important;
+}
+button[kind="primary"] {
+    background-color: #006FC0 !important;
+    color: white !important;
+    border-radius: 8px !important;
+}
 </style>
 """
+
 
 # Coloca toggle no canto superior direito
 col1, col2 = st.columns([9, 1])
@@ -253,3 +276,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
