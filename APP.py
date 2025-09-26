@@ -206,7 +206,7 @@ if st.button("✨ Gerar Apresentação"):
                 st.success(f"Slides gerados: {len(dados)}")
 
                 # Mostra o GIF animado após gerar os slides
-                st.image("foguete.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
+                st.image("tiapamela.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
 
                 st.download_button(
                     "📥 Baixar Apresentação Final",
@@ -217,5 +217,6 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
