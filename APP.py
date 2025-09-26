@@ -14,11 +14,47 @@ import re
 # ---------- CONFIGURAÇÃO INICIAL ----------
 st.set_page_config(layout="wide")
 
+# CSS para modo claro e escuro
+dark_css = """
+<style>
+.stApp {
+    background-color: #0E1117 !important;
+    color: white !important;
+}
+h1, h2, h3, h4, h5, h6, p, span, div {
+    color: white !important;
+}
+</style>
+"""
+
+light_css = """
+<style>
+.stApp {
+    background-color: #FFFFFF !important;
+    color: black !important;
+}
+h1, h2, h3, h4, h5, h6, p, span, div {
+    color: black !important;
+}
+</style>
+"""
+
+# Coloca toggle no canto superior direito
+col1, col2 = st.columns([9, 1])
+with col2:
+    dark_mode = st.toggle("🌙", help="Ativar/desativar modo escuro")
+
+# Aplica estilo com base no toggle
+if dark_mode:
+    st.markdown(dark_css, unsafe_allow_html=True)
+else:
+    st.markdown(light_css, unsafe_allow_html=True)
+
 # Exibe a logo no topo
 st.image("logo_jornada.png", use_container_width=True)
 
-st.title("🚀 Gerador Automático de Slides.")
-st.info("Certifique-se Que Está Upando Os Arquivos Corretos!")
+st.title("🚀 Gerador Automático de Slides")
+st.info("Inclui logo no topo, GIF animado e agora modo escuro 🌙")
 
 # -------------------- FUNÇÕES AUXILIARES --------------------
 def formatar_texto(texto, maiusculo_estado=False):
@@ -206,7 +242,7 @@ if st.button("✨ Gerar Apresentação"):
                 st.success(f"Slides gerados: {len(dados)}")
 
                 # Mostra o GIF animado após gerar os slides
-                st.image("tiapamela.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
+                st.image("foguete.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
 
                 st.download_button(
                     "📥 Baixar Apresentação Final",
@@ -217,7 +253,3 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
-
-
-
