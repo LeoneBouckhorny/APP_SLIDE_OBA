@@ -126,24 +126,6 @@ def replace_placeholders_in_shape(shape, team_data):
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-        # --- Tratamento especial para nomes múltiplos ---
-        if selected_key == "{{NOMES_ALUNOS}}":
-            # Remove qualquer parágrafo anterior e recomeça
-            tf = shape.text_frame
-            tf.clear()
-            linhas = new_text.split("\n")
-
-            for i, nome in enumerate(linhas):
-                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-                run = p.add_run()
-                run.text = nome
-                run.font.name = "Lexend"
-                run.font.bold = True
-                run.font.size = Pt(26.5)
-                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                p.alignment = PP_ALIGN.CENTER
-                p.line_spacing = None  # espaçamento simples
-
         elif selected_key == "{{LANCAMENTOS_VALIDOS}}":
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
             if match:
@@ -167,13 +149,29 @@ def replace_placeholders_in_shape(shape, team_data):
             run.text = new_text
             run.font.name = "Lexend"
             run.font.bold = True
+            
+       # --- Tratamento especial para nomes múltiplos ---
+            
+             if selected_key == "{{NOMES_ALUNOS}}":
+            # Remove qualquer parágrafo anterior e recomeça
+                tf = shape.text_frame
+                tf.clear()
+                linhas = new_text.split("\n")
 
-            if selected_key == "{{NOME_EQUIPE}}":
-                run.font.size = Pt(20)
+                for i, nome in enumerate(linhas):
+                    p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                    run = p.add_run()
+                    run.text = nome
+                    run.font.name = "Lexend"
+                    run.font.bold = True
+                    run.font.size = Pt(26.5)
+                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                    p.alignment = PP_ALIGN.CENTER
+                    p.line_spacing = None  # espaçamento simples
             elif selected_key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
             elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
-                run.font.size = Pt(20)
+                run.font.size = Pt(22)
             else:
                 run.font.size = Pt(18)
 
@@ -227,6 +225,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
