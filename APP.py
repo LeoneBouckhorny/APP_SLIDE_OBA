@@ -152,7 +152,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 
        # --- Tratamento especial para nomes múltiplos ---
             
-            elif selected_key == "{{NOMES_ALUNOS}}":
+           if selected_key == "{{NOMES_ALUNOS}}":
             # Remove qualquer parágrafo anterior e recomeça
                 tf = shape.text_frame
                 tf.clear()
@@ -225,6 +225,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
