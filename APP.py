@@ -170,6 +170,8 @@ def replace_placeholders_in_shape(shape, team_data):
 
             if selected_key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
+            elif selected_key == "{{NOME_EQUIPE}}":
+                run.font.size = Pt(20)
             elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
                 run.font.size = Pt(20)
             else:
@@ -225,6 +227,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
