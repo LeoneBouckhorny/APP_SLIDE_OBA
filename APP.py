@@ -126,33 +126,33 @@ def replace_placeholders_in_shape(shape, team_data):
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-        elif selected_key == "{{LANCAMENTOS_VALIDOS}}":
-            match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
-            if match:
-                prefix, valor = match.groups()
-                run1 = paragraph.add_run()
-                run1.text = prefix
-                run1.font.name = "Lexend"
-                run1.font.bold = False
-                run1.font.size = Pt(28)
-                run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-
-                run2 = paragraph.add_run()
-                run2.text = valor
-                run2.font.name = "Lexend"
-                run2.font.bold = True
-                run2.font.underline = True
-                run2.font.size = Pt(35)
-                run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-        else:
-            run = paragraph.add_run()
-            run.text = new_text
-            run.font.name = "Lexend"
-            run.font.bold = True
-            
+            elif selected_key == "{{LANCAMENTOS_VALIDOS}}":
+                match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
+                if match:
+                    prefix, valor = match.groups()
+                    run1 = paragraph.add_run()
+                    run1.text = prefix
+                    run1.font.name = "Lexend"
+                    run1.font.bold = False
+                    run1.font.size = Pt(28)
+                    run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+    
+                    run2 = paragraph.add_run()
+                    run2.text = valor
+                    run2.font.name = "Lexend"
+                    run2.font.bold = True
+                    run2.font.underline = True
+                    run2.font.size = Pt(35)
+                    run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+            else:
+                run = paragraph.add_run()
+                run.text = new_text
+                run.font.name = "Lexend"
+                run.font.bold = True
+                
        # --- Tratamento especial para nomes múltiplos ---
             
-             if selected_key == "{{NOMES_ALUNOS}}":
+            if selected_key == "{{NOMES_ALUNOS}}":
             # Remove qualquer parágrafo anterior e recomeça
                 tf = shape.text_frame
                 tf.clear()
@@ -225,6 +225,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
