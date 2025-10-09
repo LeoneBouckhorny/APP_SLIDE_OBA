@@ -126,7 +126,7 @@ def replace_placeholders_in_shape(shape, team_data):
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-            elif selected_key == "{{LANCAMENTOS_VALIDOS}}":
+            if selected_key == "{{LANCAMENTOS_VALIDOS}}":
                 match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
                 if match:
                     prefix, valor = match.groups()
@@ -152,7 +152,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 
        # --- Tratamento especial para nomes múltiplos ---
             
-            if selected_key == "{{NOMES_ALUNOS}}":
+            elif selected_key == "{{NOMES_ALUNOS}}":
             # Remove qualquer parágrafo anterior e recomeça
                 tf = shape.text_frame
                 tf.clear()
@@ -225,6 +225,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
