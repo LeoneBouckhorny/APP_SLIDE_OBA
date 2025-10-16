@@ -109,6 +109,7 @@ def replace_placeholders_in_shape(shape, team_data, debug_collect):
     """Substitui placeholders e registra infos em debug_collect (lista)."""
     if not shape.has_text_frame:
         return
+
     tf = shape.text_frame
     # pega texto completo atual
     text_before = ""
@@ -117,31 +118,48 @@ def replace_placeholders_in_shape(shape, team_data, debug_collect):
             text_before += r.text
     found_keys = [k for k in team_data.keys() if k in text_before]
     debug_collect.append({"shape_before": text_before, "found_keys": found_keys})
+
     if not found_keys:
         return
+
     # substitui cada key encontrada no texto completo e escreve parágrafos resultantes
     new_text = text_before
     for k in found_keys:
         new_text = new_text.replace(k, team_data[k])
+
     # escreve new_text dividindo por linhas
     tf.clear()
     lines = new_text.split("\n")
     for i, line in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.alignment = PP_ALIGN.CENTER if hasattr(PP_ALIGN, "CENTER") else 1
+        p.alignment = PP_ALIGN.CENTER  # 🔧 Corrigido — garante centralização sem erro
         run = p.add_run()
         run.text = line
-        # formatação simples
+        # formatação simples (ajustável)
         run.font.name = "Lexend"
         run.font.bold = True
-        run.font.size = Pt(20 if "{{NOME_EQUIPE}}" in line or "Equipe:" in line else 26.5 if line and line.count("\n")==0 and len(line)>20 else 18)
-        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        # --- Tamanho condicional (ajuste fino) ---
+        if "{{LANCAMENTOS_VALIDOS}}" in text_before or "ALCANCE:" in line:
+            run.font.size = Pt(28)
+            run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+        elif "{{NOME_EQUIPE}}" in text_before or "Equipe:" in line:
+            run.font.size = Pt(20)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        elif "{{NOME_ESCOLA}}" in text_before or "{{CIDADE_UF}}" in text_before:
+            run.font.size = Pt(22)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        else:
+            run.font.size = Pt(26.5)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
     # pega texto depois pra debug
     text_after = ""
     for p in tf.paragraphs:
         for r in p.runs:
             text_after += r.text + " "
     debug_collect[-1]["shape_after"] = text_after.strip()
+
 
 def gerar_apresentacao_debug(dados, template_stream, max_preview=3):
     prs = Presentation(template_stream)
@@ -212,3 +230,4 @@ if st.button("🔧 Gerar Apresentação (Diagnóstico)"):
         prs_final.save(buf)
         buf.seek(0)
         st.download_button("📥 Baixar PPT (diagnóstico)", data=buf, file_name="diagnostico_output.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
