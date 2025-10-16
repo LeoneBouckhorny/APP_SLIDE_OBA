@@ -108,9 +108,12 @@ def replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
-    tf = shape.text_frame
-    for paragraph in list(tf.paragraphs):
+    for paragraph in shape.text_frame.paragraphs:
         full_text = "".join(run.text for run in paragraph.runs)
+
+        # --- Corrige placeholders colados (ex: {{NOME_ESCOLA}}{{CIDADE_UF}}) ---
+        full_text = full_text.replace("}}{{", "}}\n{{")
+
         selected_key = None
         for k in team_data.keys():
             if k in full_text:
@@ -119,52 +122,80 @@ def replace_placeholders_in_shape(shape, team_data):
         if not selected_key:
             continue
 
-        # --- Adiciona quebra de linha entre placeholders colados ---
-        full_text = full_text.replace("}}{{", "}}\n{{")
-
+        # Substitui texto
         new_text = full_text
-        for k in team_data.keys():
-            new_text = new_text.replace(k, team_data[k])
+        for k, v in team_data.items():
+            new_text = new_text.replace(k, v)
 
-        tf.clear()
-        lines = new_text.split("\n")
-        for i, line in enumerate(lines):
-            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-            p.alignment = PP_ALIGN.CENTER
-            run = p.add_run()
-            run.text = line
+        # Remove runs antigos
+        while paragraph.runs:
+            paragraph._p.remove(paragraph.runs[0]._r)
+
+        # --- Lançamento válido ---
+        if selected_key == "{{LANCAMENTOS_VALIDOS}}":
+            match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
+            if match:
+                prefix, valor = match.groups()
+                run1 = paragraph.add_run()
+                run1.text = prefix
+                run1.font.name = "Lexend"
+                run1.font.bold = False
+                run1.font.size = Pt(28)
+                run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+                run2 = paragraph.add_run()
+                run2.text = valor
+                run2.font.name = "Lexend"
+                run2.font.bold = True
+                run2.font.underline = True
+                run2.font.size = Pt(35)
+                run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+        # --- Nomes (alunos, líder, acompanhante) ---
+        elif selected_key == "{{NOMES_ALUNOS}}":
+            tf = shape.text_frame
+            tf.clear()
+            linhas = new_text.split("\n")
+            for i, nome in enumerate(linhas):
+                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                run = p.add_run()
+                run.text = nome
+                run.font.name = "Lexend"
+                run.font.bold = True
+                run.font.size = Pt(26.5)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+
+        # --- Nome da equipe ---
+        elif selected_key == "{{NOME_EQUIPE}}":
+            run = paragraph.add_run()
+            run.text = new_text
             run.font.name = "Lexend"
             run.font.bold = True
-
-            # Formatação específica
-            if "ALCANCE:" in line:
-                match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", line, re.IGNORECASE)
-                if match:
-                    prefix, valor = match.groups()
-                    run1 = p.add_run()
-                    run1.text = prefix
-                    run1.font.name = "Lexend"
-                    run1.font.bold = False
-                    run1.font.size = Pt(28)
-                    run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-
-                    run2 = p.add_run()
-                    run2.text = valor
-                    run2.font.name = "Lexend"
-                    run2.font.bold = True
-                    run2.font.underline = True
-                    run2.font.size = Pt(35)
-                    run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-                continue
-
-            elif "Equipe:" in line:
-                run.font.size = Pt(20)
-            elif "/" in line:
-                run.font.size = Pt(22)
-            else:
-                run.font.size = Pt(26.5)
-
+            run.font.size = Pt(20)
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            paragraph.alignment = PP_ALIGN.CENTER
+
+        # --- Escola e cidade em linhas diferentes ---
+        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+            tf = shape.text_frame
+            tf.clear()
+            partes = [
+                team_data.get("{{NOME_ESCOLA}}", ""),
+                team_data.get("{{CIDADE_UF}}", "")
+            ]
+            for i, parte in enumerate(partes):
+                if not parte:
+                    continue
+                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                run = p.add_run()
+                run.text = parte
+                run.font.name = "Lexend"
+                run.font.bold = True
+                run.font.size = Pt(20)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+
 
 # -------------------- GERAÇÃO FINAL --------------------
 def gerar_apresentacao(dados, template_stream):
@@ -212,3 +243,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
