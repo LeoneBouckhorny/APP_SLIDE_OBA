@@ -108,10 +108,12 @@ def replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
-    for paragraph in shape.text_frame.paragraphs:
+    tf = shape.text_frame
+
+    for paragraph in list(tf.paragraphs):
         full_text = "".join(run.text for run in paragraph.runs)
 
-        # --- Corrige placeholders colados (ex: {{NOME_ESCOLA}}{{CIDADE_UF}}) ---
+        # --- Corrige placeholders colados (ex: {{NOME_ESCOLA}}{{CIDADE_UF}} ou {{NOMES_ALUNOS}}{{NOME_EQUIPE}}) ---
         full_text = full_text.replace("}}{{", "}}\n{{")
 
         selected_key = None
@@ -122,16 +124,16 @@ def replace_placeholders_in_shape(shape, team_data):
         if not selected_key:
             continue
 
-        # Substitui texto
+        # Substitui placeholders por valores
         new_text = full_text
         for k, v in team_data.items():
             new_text = new_text.replace(k, v)
 
-        # Remove runs antigos
+        # Limpa runs antigos
         while paragraph.runs:
             paragraph._p.remove(paragraph.runs[0]._r)
 
-        # --- Lançamento válido ---
+        # --- ALCANCE ---
         if selected_key == "{{LANCAMENTOS_VALIDOS}}":
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
             if match:
@@ -151,11 +153,27 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
-        # --- Nomes (alunos, líder, acompanhante) ---
-        elif selected_key == "{{NOMES_ALUNOS}}":
-            tf = shape.text_frame
+        # --- NOMES + EQUIPE ---
+        elif "{{NOMES_ALUNOS}}" in full_text and "{{NOME_EQUIPE}}" in full_text:
             tf.clear()
-            linhas = new_text.split("\n")
+            linhas = team_data["{{NOMES_ALUNOS}}"].split("\n") + [team_data["{{NOME_EQUIPE}}"]]
+            for i, nome in enumerate(linhas):
+                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                run = p.add_run()
+                run.text = nome
+                run.font.name = "Lexend"
+                run.font.bold = True
+                if i == len(linhas) - 1:  # última linha = nome da equipe
+                    run.font.size = Pt(20)
+                else:
+                    run.font.size = Pt(26.5)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+
+        # --- SOMENTE NOMES ---
+        elif selected_key == "{{NOMES_ALUNOS}}":
+            tf.clear()
+            linhas = team_data["{{NOMES_ALUNOS}}"].split("\n")
             for i, nome in enumerate(linhas):
                 p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
                 run = p.add_run()
@@ -166,7 +184,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                 p.alignment = PP_ALIGN.CENTER
 
-        # --- Nome da equipe ---
+        # --- NOME DA EQUIPE (se estiver sozinho) ---
         elif selected_key == "{{NOME_EQUIPE}}":
             run = paragraph.add_run()
             run.text = new_text
@@ -176,17 +194,11 @@ def replace_placeholders_in_shape(shape, team_data):
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
             paragraph.alignment = PP_ALIGN.CENTER
 
-        # --- Escola e cidade em linhas diferentes ---
-        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
-            tf = shape.text_frame
+        # --- ESCOLA + CIDADE ---
+        elif "{{NOME_ESCOLA}}" in full_text and "{{CIDADE_UF}}" in full_text:
             tf.clear()
-            partes = [
-                team_data.get("{{NOME_ESCOLA}}", ""),
-                team_data.get("{{CIDADE_UF}}", "")
-            ]
+            partes = [team_data["{{NOME_ESCOLA}}"], team_data["{{CIDADE_UF}}"]]
             for i, parte in enumerate(partes):
-                if not parte:
-                    continue
                 p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
                 run = p.add_run()
                 run.text = parte
@@ -195,6 +207,16 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.font.size = Pt(20)
                 run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                 p.alignment = PP_ALIGN.CENTER
+
+        # --- SOMENTE ESCOLA OU CIDADE (caso isolado) ---
+        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+            run = paragraph.add_run()
+            run.text = new_text
+            run.font.name = "Lexend"
+            run.font.bold = True
+            run.font.size = Pt(20)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            paragraph.alignment = PP_ALIGN.CENTER
 
 
 # -------------------- GERAÇÃO FINAL --------------------
@@ -243,4 +265,5 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
