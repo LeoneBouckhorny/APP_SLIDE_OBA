@@ -75,7 +75,7 @@ def extrair_dados(uploaded_file):
         info = membros[0]
         dados_finais.append({
             "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info['Valido']} m",
-            "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
+            "{{NOME_EQUIPE}}": f"Equipe: {re.sub(r'[^0-9]+', '', equipe_nome)}" if re.search(r'\d', equipe_nome) else f"Equipe: {equipe_nome.strip()}",
             "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
             "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
             "{{NOMES_ALUNOS}}": nomes_formatados
@@ -222,3 +222,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
