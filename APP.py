@@ -177,7 +177,7 @@ def extrair_dados(uploaded_file):
             "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
             "{{NOME_ESCOLA}}": f"{formatar_texto(info['Escola'])}\n{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
             "{{NOMES_ALUNOS}}": nomes_formatados
-        })
+            })
 
     return dados_finais
 
@@ -335,6 +335,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
