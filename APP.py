@@ -182,6 +182,37 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.font.size = Pt(18)
 
 
+def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
+    """
+    Gera uma nova apresentação PowerPoint preenchendo um slide modelo com os dados das equipes.
+    """
+    # Abre a apresentação modelo
+    prs = Presentation(arquivo_pptx_modelo)
+
+    # Assumimos que o segundo slide (índice 1) é o modelo a ser duplicado.
+    # O primeiro slide (índice 0) pode ser uma capa.
+    if len(prs.slides) < 2:
+        raise ValueError("A apresentação modelo precisa ter pelo menos 2 slides (capa e slide modelo).")
+    slide_modelo = prs.slides[1]
+
+    # Para cada equipe nos dados extraídos...
+    for dados_equipe in dados_equipes:
+        # Duplica o slide modelo (incluindo imagens e formatação)
+        novo_slide = duplicate_slide_with_media(prs, slide_modelo)
+
+        # Itera sobre cada forma (caixa de texto, imagem, etc.) no novo slide
+        for shape in novo_slide.shapes:
+            # Chama a função para substituir os placeholders (ex: {{NOME_EQUIPE}})
+            replace_placeholders_in_shape(shape, dados_equipe)
+
+    # Remove o slide modelo original da apresentação final
+    # Isso é feito acessando o elemento XML do slide
+    slide_modelo_xml = slide_modelo._element
+    prs.slides._sldIdLst.remove(slide_modelo_xml)
+
+    # Retorna o objeto da apresentação final, pronto para ser salvo
+    return prs
+
 # -------------------- INTERFACE STREAMLIT --------------------
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx", "DOCX"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx", "PPTX"])
@@ -213,4 +244,5 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
