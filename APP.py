@@ -104,11 +104,32 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 # -------------------- SUBSTITUIÇÃO DE PLACEHOLDERS --------------------
-def replace_placeholders_in_shape(shape, team_data):
+ replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
     tf = shape.text_frame
+
+    # Quando os placeholders de nomes e equipe estão na mesma caixa de texto, mas em
+    # parágrafos diferentes, lidamos com todos de uma vez para garantir que as duas
+    # informações sejam aplicadas com o mesmo estilo.
+    frame_text = "\n".join("".join(run.text for run in paragraph.runs) for paragraph in tf.paragraphs)
+    if "{{NOMES_ALUNOS}}" in frame_text and "{{NOME_EQUIPE}}" in frame_text:
+        tf.clear()
+        linhas = team_data["{{NOMES_ALUNOS}}"].split("\n") + [team_data["{{NOME_EQUIPE}}"]]
+        for i, nome in enumerate(linhas):
+            p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+            run = p.add_run()
+            run.text = nome
+            run.font.name = "Lexend"
+            run.font.bold = True
+            if i == len(linhas) - 1:  # última linha = nome da equipe
+                run.font.size = Pt(20)
+            else:
+                run.font.size = Pt(26.5)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            p.alignment = PP_ALIGN.CENTER
+        return
 
     for paragraph in list(tf.paragraphs):
         full_text = "".join(run.text for run in paragraph.runs)
@@ -270,6 +291,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
