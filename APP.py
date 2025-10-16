@@ -166,12 +166,18 @@ def extrair_dados(uploaded_file):
         nomes_formatados = "\n".join(linhas_nomes)
 
         info = membros[0]
+               info = membros[0]
+        # Monta nome da equipe e escola/cidade com quebras de linha
+        nome_equipe_formatado = f"Equipe: {equipe_nome.split()[-1]}"
+        nome_escola_formatado = formatar_texto(info.get("Escola", ""))
+        cidade_uf_formatado = f"{formatar_texto(info.get('Cidade', ''))} / {formatar_texto(info.get('Estado', ''), True)}"
+
         dados_finais.append({
-            "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info.get('Valido','')} m",
-            "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
-            "{{NOME_ESCOLA}}": formatar_texto(info.get("Escola","")),
-            "{{CIDADE_UF}}": f"{formatar_texto(info.get('Cidade',''))} / {formatar_texto(info.get('Estado',''), True)}",
-            "{{NOMES_ALUNOS}}": nomes_formatados
+            "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info.get('Valido', '')} m",
+            "{{NOMES_ALUNOS}}": nomes_formatados,
+            "{{NOME_EQUIPE}}": f"\n{nome_equipe_formatado}",
+            "{{NOME_ESCOLA}}": f"\n{nome_escola_formatado}",
+            "{{CIDADE_UF}}": f"{cidade_uf_formatado}"
         })
 
     return dados_finais
@@ -330,3 +336,4 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
