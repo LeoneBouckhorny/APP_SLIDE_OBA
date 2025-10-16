@@ -185,19 +185,22 @@ def replace_placeholders_in_shape(shape, team_data):
 def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
     """
     Gera uma nova apresentação PowerPoint preenchendo um slide modelo com os dados das equipes.
+    Esta versão é adaptada para um modelo PPTX que contém apenas UM slide.
     """
     # Abre a apresentação modelo
     prs = Presentation(arquivo_pptx_modelo)
 
-    # Assumimos que o segundo slide (índice 1) é o modelo a ser duplicado.
-    # O primeiro slide (índice 0) pode ser uma capa.
-    if len(prs.slides) < 1:
-        raise ValueError("A apresentação modelo precisa ter pelo menos 2 slides (capa e slide modelo).")
-    slide_modelo = prs.slides[1]
+    # Verifica se a apresentação modelo tem pelo menos um slide
+    if not prs.slides:
+        raise ValueError("A apresentação modelo está vazia e não contém nenhum slide.")
+    
+    # Assumimos que o PRIMEIRO slide (índice 0) é o modelo a ser duplicado.
+    slide_modelo = prs.slides[0]
 
     # Para cada equipe nos dados extraídos...
     for dados_equipe in dados_equipes:
         # Duplica o slide modelo (incluindo imagens e formatação)
+        # O novo slide é adicionado ao final da apresentação
         novo_slide = duplicate_slide_with_media(prs, slide_modelo)
 
         # Itera sobre cada forma (caixa de texto, imagem, etc.) no novo slide
@@ -205,7 +208,7 @@ def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
             # Chama a função para substituir os placeholders (ex: {{NOME_EQUIPE}})
             replace_placeholders_in_shape(shape, dados_equipe)
 
-    # Remove o slide modelo original da apresentação final
+    # APÓS criar todos os novos slides, remove o slide modelo original (que está no início)
     # Isso é feito acessando o elemento XML do slide
     slide_modelo_xml = slide_modelo._element
     prs.slides._sldIdLst.remove(slide_modelo_xml)
@@ -244,6 +247,7 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
