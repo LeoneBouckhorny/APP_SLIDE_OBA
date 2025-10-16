@@ -104,27 +104,38 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 def replace_placeholders_in_shape(shape, team_data):
+    """Substitui placeholders dentro de cada forma do slide."""
     if not shape.has_text_frame:
         return
 
-    for paragraph in shape.text_frame.paragraphs:
+    text_frame = shape.text_frame
+
+    for paragraph in list(text_frame.paragraphs):
         full_text = "".join(run.text for run in paragraph.runs)
         selected_key = None
-        for k in team_data.keys():
-            if k in full_text:
-                selected_key = k
+
+        # Identifica o placeholder
+        for key in team_data.keys():
+            if key in full_text:
+                selected_key = key
                 break
+
         if not selected_key:
             continue
 
+        # Substitui o texto do placeholder pelo valor correspondente
         new_text = full_text.replace(selected_key, team_data[selected_key])
-        while paragraph.runs:
+
+        # Limpa os runs anteriores
+        for _ in range(len(paragraph.runs)):
             paragraph._p.remove(paragraph.runs[0]._r)
 
+        # --- Regras específicas de formatação ---
         if selected_key == "{{LANCAMENTOS_VALIDOS}}":
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
             if match:
                 prefix, valor = match.groups()
+
                 run1 = paragraph.add_run()
                 run1.text = prefix
                 run1.font.name = "Lexend"
@@ -141,11 +152,10 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
         elif selected_key == "{{NOMES_ALUNOS}}":
-            tf = shape.text_frame
-            tf.clear()
-            linhas = new_text.split("\n")
-            for i, nome in enumerate(linhas):
-                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+            text_frame.clear()
+            lines = new_text.split("\n")
+            for i, nome in enumerate(lines):
+                p = text_frame.add_paragraph() if i > 0 else text_frame.paragraphs[0]
                 run = p.add_run()
                 run.text = nome
                 run.font.name = "Lexend"
@@ -156,27 +166,31 @@ def replace_placeholders_in_shape(shape, team_data):
 
         elif selected_key == "{{NOME_EQUIPE}}":
             run = paragraph.add_run()
-            run.text = new_text
+            run.text = new_text  # 🔥 Aqui ele de fato escreve o texto
             run.font.name = "Lexend"
             run.font.bold = True
             run.font.size = Pt(20)
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
             paragraph.alignment = PP_ALIGN.CENTER
 
-        
         elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
-            tf = shape.text_frame
-            tf.clear()
-            partes = [team_data["{{NOME_ESCOLA}}"], team_data["{{CIDADE_UF}}"]]
-            for i, parte in enumerate(partes):
-                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-                run = p.add_run()
-                run.text = parte
-                run.font.name = "Lexend"
-                run.font.bold = True
-                run.font.size = Pt(20)
-                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                p.alignment = PP_ALIGN.CENTER
+            run = paragraph.add_run()
+            run.text = new_text
+            run.font.name = "Lexend"
+            run.font.bold = True
+            run.font.size = Pt(22)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            paragraph.alignment = PP_ALIGN.CENTER
+
+        else:
+            run = paragraph.add_run()
+            run.text = new_text
+            run.font.name = "Lexend"
+            run.font.bold = True
+            run.font.size = Pt(18)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            paragraph.alignment = PP_ALIGN.CENTER
+
 
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
@@ -223,5 +237,6 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
