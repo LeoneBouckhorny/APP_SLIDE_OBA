@@ -158,11 +158,12 @@ def replace_placeholders_in_shape(shape, team_data):
             run = paragraph.add_run()
             run.text = new_text
             run.font.name = "Lexend"
-            run.font.size = Pt(20)
             run.font.bold = True
+            run.font.size = Pt(20)
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
             paragraph.alignment = PP_ALIGN.CENTER
 
+        
         elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
             tf = shape.text_frame
             tf.clear()
@@ -222,4 +223,5 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
