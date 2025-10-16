@@ -225,13 +225,18 @@ def gerar_apresentacao(dados, template_stream):
     if not dados or not prs.slides:
         return prs
 
-    modelo = prs.slides[0]
-    for _ in range(len(dados) - 1):
-        duplicate_slide_with_media(prs, modelo)
+modelo = prs.slides[ 0 ]
+    slides_para_preencher = [modelo]
 
-    for slide, team in zip(prs.slides, dados):
-        for shape in slide.shapes:
-            replace_placeholders_in_shape(shape, team)
+    para _ no intervalo ( len (dados) - 1 ):
+ 
+        novo_slide = duplicate_slide_with_media(prs, modelo)
+        slides_para_preencher.append(novo_slide)
+
+    for slide, team inzip(slides_para_preencher, dados):
+ 
+        para forma em slide.shapes:
+            replace_placeholders_in_shape(forma, equipe)
 
     return prs
 
@@ -265,5 +270,6 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
