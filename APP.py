@@ -166,7 +166,6 @@ def extrair_dados(uploaded_file):
         nomes_formatados = "\n".join(linhas_nomes)
 
         info = membros[0]
-               info = membros[0]
         # Monta nome da equipe e escola/cidade com quebras de linha
         nome_equipe_formatado = f"Equipe: {equipe_nome.split()[-1]}"
         nome_escola_formatado = formatar_texto(info.get("Escola", ""))
@@ -336,4 +335,5 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
