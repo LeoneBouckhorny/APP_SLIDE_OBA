@@ -174,24 +174,7 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
-        # --- NOMES + EQUIPE ---
-        elif "{{NOMES_ALUNOS}}" in full_text and "{{NOME_EQUIPE}}" in full_text:
-            tf.clear()
-            linhas = team_data["{{NOMES_ALUNOS}}"].split("\n") + [team_data["{{NOME_EQUIPE}}"]]
-            for i, nome in enumerate(linhas):
-                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-                run = p.add_run()
-                run.text = nome
-                run.font.name = "Lexend"
-                run.font.bold = True
-                if i == len(linhas) - 1:  # última linha = nome da equipe
-                    run.font.size = Pt(20)
-                else:
-                    run.font.size = Pt(26.5)
-                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                p.alignment = PP_ALIGN.CENTER
-
-        # --- SOMENTE NOMES ---
+       # --- SOMENTE NOMES ---
         elif selected_key == "{{NOMES_ALUNOS}}":
             tf.clear()
             linhas = team_data["{{NOMES_ALUNOS}}"].split("\n")
@@ -246,18 +229,16 @@ def gerar_apresentacao(dados, template_stream):
     if not dados or not prs.slides:
         return prs
 
-modelo = prs.slides[ 0 ]
+    modelo = prs.slides[0]
     slides_para_preencher = [modelo]
 
-    para _ no intervalo ( len (dados) - 1 ):
- 
+    for _ in range(len(dados) - 1):
         novo_slide = duplicate_slide_with_media(prs, modelo)
         slides_para_preencher.append(novo_slide)
 
-    for slide, team inzip(slides_para_preencher, dados):
- 
-        para forma em slide.shapes:
-            replace_placeholders_in_shape(forma, equipe)
+    for slide, team in zip(slides_para_preencher, dados):
+        for shape in slide.shapes:
+            replace_placeholders_in_shape(shape, team)
 
     return prs
 
@@ -291,6 +272,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
