@@ -111,73 +111,69 @@ def replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
-    for paragraph in shape.text_frame.paragraphs:
-        full_text = "".join(run.text for run in paragraph.runs)
-        selected_key = None
-        for k in team_data.keys():
-            if k in full_text:
-                selected_key = k
-                break
-        if not selected_key:
+    # Texto completo da shape (mesmo se o placeholder estiver quebrado)
+    full_text_shape = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs)
+
+    for key, value in team_data.items():
+        if key not in full_text_shape:
             continue
 
-        new_text = full_text.replace(selected_key, team_data[selected_key])
-        # Limpa o conteúdo anterior
-        while paragraph.runs:
-            paragraph._p.remove(paragraph.runs[0]._r)
+        tf = shape.text_frame
+        tf.clear()
 
-            if selected_key == "{{LANCAMENTOS_VALIDOS}}":
-                match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
-                if match:
-                    prefix, valor = match.groups()
-                    run1 = paragraph.add_run()
-                    run1.text = prefix
-                    run1.font.name = "Lexend"
-                    run1.font.bold = False
-                    run1.font.size = Pt(28)
-                    run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-    
-                    run2 = paragraph.add_run()
-                    run2.text = valor
-                    run2.font.name = "Lexend"
-                    run2.font.bold = True
-                    run2.font.underline = True
-                    run2.font.size = Pt(35)
-                    run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-            else:
-                run = paragraph.add_run()
-                run.text = new_text
+        # NOMES (líder/acompanhante/alunos)
+        if key == "{{NOMES_ALUNOS}}":
+            linhas = value.split("\n")
+            for i, nome in enumerate(linhas):
+                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                run = p.add_run()
+                run.text = nome
                 run.font.name = "Lexend"
                 run.font.bold = True
-                
-       # --- Tratamento especial para nomes múltiplos ---
-            
-            if selected_key == "{{NOMES_ALUNOS}}":
-            # Remove qualquer parágrafo anterior e recomeça
-                tf = shape.text_frame
-                tf.clear()
-                linhas = new_text.split("\n")
+                run.font.size = Pt(26.5)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+                p.line_spacing = None
 
-                for i, nome in enumerate(linhas):
-                    p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-                    run = p.add_run()
-                    run.text = nome
-                    run.font.name = "Lexend"
-                    run.font.bold = True
-                    run.font.size = Pt(26.5)
-                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                    p.alignment = PP_ALIGN.CENTER
-                    p.line_spacing = None  # espaçamento simples
-            elif selected_key == "{{NOME_EQUIPE}}":
+        # ALCANCE (com parte negrito + sublinhado)
+        elif key == "{{LANCAMENTOS_VALIDOS}}":
+            p = tf.paragraphs[0]
+            match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", value, re.IGNORECASE)
+            if match:
+                prefix, numero = match.groups()
+                run1 = p.add_run()
+                run1.text = prefix
+                run1.font.name = "Lexend"
+                run1.font.bold = False
+                run1.font.size = Pt(28)
+                run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+                run2 = p.add_run()
+                run2.text = numero
+                run2.font.name = "Lexend"
+                run2.font.bold = True
+                run2.font.underline = True
+                run2.font.size = Pt(35)
+                run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+        # CAMPOS NORMAIS
+        else:
+            p = tf.paragraphs[0]
+            run = p.add_run()
+            run.text = value
+            run.font.name = "Lexend"
+            run.font.bold = True
+
+            if key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
-            elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+            elif key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
                 run.font.size = Pt(22)
             else:
                 run.font.size = Pt(18)
 
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-            paragraph.alignment = PP_ALIGN.CENTER
-            paragraph.line_spacing = None  # espaçamento simples
+            p.alignment = PP_ALIGN.CENTER
+            p.line_spacing = None
 
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
@@ -195,8 +191,8 @@ def gerar_apresentacao(dados, template_stream):
     return prs
 
 # -------------------- INTERFACE STREAMLIT --------------------
-docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
-pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
+docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx", "DOCX"])
+pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx", "PPTX"])
 
 if st.button("✨ Gerar Apresentação"):
     if not docx_file or not pptx_file:
@@ -213,7 +209,6 @@ if st.button("✨ Gerar Apresentação"):
                 buf.seek(0)
                 st.success(f"Slides gerados: {len(dados)}")
 
-                # Mostra o GIF animado após gerar os slides
                 st.image("tiapamela.gif", caption="Apresentação pronta! 🚀", use_container_width=True)
 
                 st.download_button(
@@ -223,15 +218,6 @@ if st.button("✨ Gerar Apresentação"):
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     use_container_width=True
                 )
+
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
-
-
-
-
-
-
-
-
-
