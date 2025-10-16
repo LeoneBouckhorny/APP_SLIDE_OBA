@@ -111,17 +111,19 @@ def replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
-    # Texto completo da shape (mesmo se o placeholder estiver quebrado em runs)
     full_text_shape = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs)
 
     for key, value in team_data.items():
         if key not in full_text_shape:
-            continue
+            # Tenta encontrar placeholder parcialmente (ex: {{NOME_EQUIPE}} quebrado)
+            if any(k.replace("{", "").replace("}", "") in full_text_shape for k in team_data.keys()):
+                pass
+            else:
+                continue
 
         tf = shape.text_frame
         tf.clear()
 
-        # NOMES (Líder, Acompanhante, Alunos)
         if key == "{{NOMES_ALUNOS}}":
             linhas = value.split("\n")
             for i, nome in enumerate(linhas):
@@ -135,7 +137,6 @@ def replace_placeholders_in_shape(shape, team_data):
                 p.alignment = PP_ALIGN.CENTER
                 p.line_spacing = None
 
-        # ALCANCE (com negrito e sublinhado)
         elif key == "{{LANCAMENTOS_VALIDOS}}":
             p = tf.paragraphs[0]
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", value, re.IGNORECASE)
@@ -163,13 +164,15 @@ def replace_placeholders_in_shape(shape, team_data):
                 run.font.size = Pt(35)
                 run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
-        # CAMPOS NORMAIS (Equipe, Escola, Cidade/UF)
         else:
             p = tf.paragraphs[0]
             run = p.add_run()
             run.text = value
             run.font.name = "Lexend"
             run.font.bold = True
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            p.alignment = PP_ALIGN.CENTER
+            p.line_spacing = None
 
             if key == "{{NOME_EQUIPE}}":
                 run.font.size = Pt(20)
@@ -178,24 +181,6 @@ def replace_placeholders_in_shape(shape, team_data):
             else:
                 run.font.size = Pt(18)
 
-            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-            p.alignment = PP_ALIGN.CENTER
-            p.line_spacing = None
-
-def gerar_apresentacao(dados, template_stream):
-    prs = Presentation(template_stream)
-    if not dados or not prs.slides:
-        return prs
-
-    modelo = prs.slides[0]
-    for _ in range(len(dados) - 1):
-        duplicate_slide_with_media(prs, modelo)
-
-    for slide, team in zip(prs.slides, dados):
-        for shape in slide.shapes:
-            replace_placeholders_in_shape(shape, team)
-
-    return prs
 
 # -------------------- INTERFACE STREAMLIT --------------------
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx", "DOCX"])
@@ -228,3 +213,4 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
