@@ -204,106 +204,131 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 def replace_placeholders_in_shape(shape, team_data):
-    """
-    Substitui todos os placeholders encontrados na shape.
-    Se houver múltiplos placeholders na mesma shape, substitui todos
-    e escreve o texto resultado dividindo em parágrafos por '\n'.
-    Trata NOMES_ALUNOS (múltiplas linhas) e LANCAMENTOS_VALIDOS (prefixo + valor) com formatação especial.
-    """
     if not shape.has_text_frame:
         return
 
-    # junta todo texto da shape para identificar placeholders mesmo se quebrados em runs
-    full_text_shape = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs)
-    keys_present = [k for k in team_data.keys() if k in full_text_shape]
+    for paragraph in shape.text_frame.paragraphs:
+        full_text = "".join(run.text for run in paragraph.runs)
+        selected_key = None
 
-    if not keys_present:
-        return
+        # Verifica qual placeholder está presente
+        for k in team_data.keys():
+            if k in full_text:
+                selected_key = k
+                break
 
-    # monta novo texto substituindo cada placeholder por seu valor
-    new_text = full_text_shape
-    for k in keys_present:
-        new_text = new_text.replace(k, team_data[k])
+        if not selected_key:
+            continue
 
-    # agora escreve o new_text na shape (cada '\n' vira um parágrafo)
-    tf = shape.text_frame
-    tf.clear()
-    paragraphs = new_text.split("\n")
+        new_text = full_text.replace(selected_key, team_data[selected_key])
 
-    for i, paragraph_text in enumerate(paragraphs):
-        # o primeiro parágrafo já existe como tf.paragraphs[0]
-        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        # caso especial: se o parágrafo contém "ALCANCE:" aplicamos formatação dupla
-        match = re.match(r"(.*ALCANCE:\s*)([\d,.]+\s*m)(.*)", paragraph_text, re.IGNORECASE)
-        if match:
-            pre, number, post = match.groups()
-            # primeiro run (prefixo)
-            r1 = p.add_run()
-            r1.text = pre
-            r1.font.name = "Lexend"
-            r1.font.bold = False
-            r1.font.size = Pt(28)
-            r1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-            # segundo run (número + m)
-            r2 = p.add_run()
-            r2.text = number
-            r2.font.name = "Lexend"
-            r2.font.bold = True
-            r2.font.underline = True
-            r2.font.size = Pt(35)
-            r2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-            # se tiver texto depois, adiciona em run normal
-            if post.strip():
-                r3 = p.add_run()
-                r3.text = post
-                r3.font.name = "Lexend"
-                r3.font.bold = True
-                r3.font.size = Pt(18)
-                r3.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        else:
-            # caso normal: escreve o parágrafo inteiro
-            run = p.add_run()
-            run.text = paragraph_text
+        # Limpa o conteúdo anterior
+        while paragraph.runs:
+            paragraph._p.remove(paragraph.runs[0]._r)
+
+        # --- Estilos específicos ---
+        if selected_key == "{{LANCAMENTOS_VALIDOS}}":
+            match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", new_text, re.IGNORECASE)
+            if match:
+                prefix, valor = match.groups()
+
+                run1 = paragraph.add_run()
+                run1.text = prefix
+                run1.font.name = "Lexend"
+                run1.font.bold = False
+                run1.font.size = Pt(28)
+                run1.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+                run2 = paragraph.add_run()
+                run2.text = valor
+                run2.font.name = "Lexend"
+                run2.font.bold = True
+                run2.font.underline = True
+                run2.font.size = Pt(35)
+                run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+
+        elif selected_key == "{{NOMES_ALUNOS}}":
+            tf = shape.text_frame
+            tf.clear()
+            linhas = new_text.split("\n")
+
+            for i, nome in enumerate(linhas):
+                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+                run = p.add_run()
+                run.text = nome
+                run.font.name = "Lexend"
+                run.font.bold = True
+                run.font.size = Pt(26.5)
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+                p.line_spacing = None
+
+        elif selected_key == "{{NOME_EQUIPE}}":
+            run = paragraph.add_run()
+            run.text = new_text
             run.font.name = "Lexend"
             run.font.bold = True
-            # Tamanhos por conteúdo: se contém "Equipe:" ou se for escola/cidade
-            if "Equipe:" in paragraph_text:
-                run.font.size = Pt(20)
-            elif re.search(r"/\s*[A-Z]{2}$", paragraph_text.strip()):
-                # texto com "Cidade / UF" provavelmente
-                run.font.size = Pt(22)
-            else:
-                run.font.size = Pt(18)
+            run.font.size = Pt(20)
             run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        p.alignment = PP_ALIGN.CENTER
-        p.line_spacing = None
 
-# -------------------- GERAR PPTX --------------------
+        elif selected_key in ("{{NOME_ESCOLA}}", "{{CIDADE_UF}}"):
+            tf = shape.text_frame
+            tf.clear()
+
+            # Divide escola e cidade/UF em linhas separadas
+            escola = team_data.get("{{NOME_ESCOLA}}", "")
+            cidade_uf = team_data.get("{{CIDADE_UF}}", "")
+
+            p1 = tf.paragraphs[0]
+            r1 = p1.add_run()
+            r1.text = escola
+            r1.font.name = "Lexend"
+            r1.font.bold = True
+            r1.font.size = Pt(20)
+            r1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            p1.alignment = PP_ALIGN.CENTER
+
+            p2 = tf.add_paragraph()
+            r2 = p2.add_run()
+            r2.text = cidade_uf
+            r2.font.name = "Lexend"
+            r2.font.bold = True
+            r2.font.size = Pt(20)
+            r2.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            p2.alignment = PP_ALIGN.CENTER
+            p2.line_spacing = None
+
+        else:
+            run = paragraph.add_run()
+            run.text = new_text
+            run.font.name = "Lexend"
+            run.font.bold = True
+            run.font.size = Pt(18)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        paragraph.alignment = PP_ALIGN.CENTER
+        paragraph.line_spacing = None
+
+
 def gerar_apresentacao(dados, template_stream):
     prs = Presentation(template_stream)
     if not dados or not prs.slides:
         return prs
 
-    # duplica slides para ter tantos quantos equipes
     modelo = prs.slides[0]
+
+    # Duplica os slides antes de preencher
     for _ in range(len(dados) - 1):
         duplicate_slide_with_media(prs, modelo)
 
-    # substituir placeholders slide a slide
-    for slide, team in zip(prs.slides, dados):
-        # Para diagnosticar placeholders que não aparecem no modelo, coletamos quais chaves foram encontradas
-        found_any = False
-        for shape in slide.shapes:
-            before = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs) if shape.has_text_frame else ""
-            replace_placeholders_in_shape(shape, team)
-            after = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs) if shape.has_text_frame else ""
-            if before != after:
-                found_any = True
-        # Se nenhum placeholder foi detectado no slide (potencial problema de modelo), registramos aviso (não quebra o app)
-        if not found_any:
-            st.warning("Atenção: nenhum placeholder foi substituído no template para uma das equipes — verifique se o slide modelo contém os placeholders como {{NOMES_ALUNOS}}, {{NOME_EQUIPE}}, {{NOME_ESCOLA}}, {{CIDADE_UF}}, {{LANCAMENTOS_VALIDOS}}.")
+    # Preenche cada slide
+    for slide, team_data in zip(prs.slides, dados):
+        if isinstance(team_data, dict):  # ✅ Evita erro de tipo
+            for shape in slide.shapes:
+                replace_placeholders_in_shape(shape, team_data)
 
     return prs
+
 
 # -------------------- INTERFACE STREAMLIT --------------------
 docx_file = st.file_uploader("📄 Arquivo DOCX (tabela)", type=["docx", "DOCX"])
@@ -335,6 +360,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
