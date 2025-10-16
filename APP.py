@@ -104,7 +104,7 @@ def duplicate_slide_with_media(prs, source_slide):
     return new_slide
 
 # -------------------- SUBSTITUIÇÃO DE PLACEHOLDERS --------------------
- replace_placeholders_in_shape(shape, team_data):
+def replace_placeholders_in_shape(shape, team_data):
     if not shape.has_text_frame:
         return
 
@@ -291,6 +291,7 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
