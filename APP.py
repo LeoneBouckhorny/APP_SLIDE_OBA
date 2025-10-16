@@ -184,42 +184,38 @@ def replace_placeholders_in_shape(shape, team_data):
 
 def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
     """
-    Gera uma apresentação PowerPoint a partir de um modelo.
+    Gera uma apresentação PowerPoint a partir de um modelo de slide único.
     Estratégia:
-    1. Modifica o primeiro slide do modelo com os dados da primeira equipe.
-    2. Usa o primeiro slide (agora modificado) como base para duplicar e criar os slides das equipes restantes.
-    Isso evita a necessidade de deletar o slide modelo, prevenindo o erro "Element is not a child of this node".
+    1. Carrega o PPTX modelo com um único slide.
+    2. Usa esse slide original como fonte para duplicar e criar um novo slide para CADA equipe.
+    3. Após criar todos os novos slides, remove o slide modelo original (que fica no início).
+    Isso garante que cada novo slide seja uma cópia fiel do modelo original.
     """
     prs = Presentation(arquivo_pptx_modelo)
 
     # Verifica se há slides no modelo e dados para processar
     if not prs.slides:
-        raise ValueError("A apresentação modelo está vazia.")
+        raise ValueError("A apresentação modelo está vazia e não contém nenhum slide.")
     if not dados_equipes:
-        # Se não houver dados, retorna a apresentação original sem modificações
-        return prs
+        return prs  # Retorna a apresentação original se não houver dados
 
-    # --- Passo 1: Processar a primeira equipe ---
-    # Pega o slide modelo (o primeiro e único)
-    slide_a_ser_usado_como_modelo = prs.slides[0]
-    
-    # Pega os dados da primeira equipe
-    primeira_equipe = dados_equipes[0]
-    
-    # Preenche o primeiro slide com os dados da primeira equipe
-    for shape in slide_a_ser_usado_como_modelo.shapes:
-        replace_placeholders_in_shape(shape, primeira_equipe)
+    # Pega uma referência ao slide modelo original (o primeiro, índice 0)
+    slide_modelo_original = prs.slides[0]
 
-    # --- Passo 2: Processar as equipes restantes ---
-    equipes_restantes = dados_equipes[1:]
-    
-    for dados_equipe in equipes_restantes:
-        # Duplica o primeiro slide (que agora já é o slide da primeira equipe)
-        novo_slide = duplicate_slide_with_media(prs, slide_a_ser_usado_como_modelo)
+    # Itera sobre TODAS as equipes da lista de dados
+    for dados_equipe in dados_equipes:
+        # Para cada equipe, cria um novo slide duplicando o modelo ORIGINAL
+        novo_slide = duplicate_slide_with_media(prs, slide_modelo_original)
         
-        # Preenche as informações no novo slide duplicado
+        # Preenche as informações no novo slide que acabou de ser criado
         for shape in novo_slide.shapes:
             replace_placeholders_in_shape(shape, dados_equipe)
+
+    # DEPOIS que o loop terminou e todos os slides foram criados,
+    # remove o slide modelo original, que ainda é o primeiro da lista.
+    # Acessamos o elemento XML para garantir uma remoção segura.
+    slide_modelo_xml = slide_modelo_original._element
+    prs.slides._sldIdLst.remove(slide_modelo_xml)
 
     return prs
 
@@ -254,6 +250,7 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
