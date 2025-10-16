@@ -191,7 +191,7 @@ def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
 
     # Assumimos que o segundo slide (índice 1) é o modelo a ser duplicado.
     # O primeiro slide (índice 0) pode ser uma capa.
-    if len(prs.slides) < 2:
+    if len(prs.slides) < 1:
         raise ValueError("A apresentação modelo precisa ter pelo menos 2 slides (capa e slide modelo).")
     slide_modelo = prs.slides[1]
 
@@ -244,5 +244,6 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
