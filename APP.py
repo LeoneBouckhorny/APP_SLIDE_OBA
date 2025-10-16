@@ -1,5 +1,117 @@
+import streamlit as st
+from docx import Document
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.text import PP_ALIGN
+from pptx.util import Pt
+from pptx.dml.color import RGBColor
+from collections import defaultdict
+from copy import deepcopy
+from io import BytesIO
+from lxml import etree
+import re
 
-    # Texto completo da shape (mesmo se o placeholder estiver quebrado)
+# ---------- CONFIGURAÇÃO INICIAL ----------
+st.set_page_config(layout="wide")
+
+# Exibe a logo no topo
+st.image("logo_jornada.png", use_container_width=True)
+
+st.title("🚀 Gerador Automático de Slides")
+st.info("")
+
+# -------------------- FUNÇÕES AUXILIARES --------------------
+def formatar_texto(texto, maiusculo_estado=False):
+    texto = ' '.join(texto.strip().split())
+    return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
+
+def extrair_dados(uploaded_file):
+    doc = Document(uploaded_file)
+    registros = []
+    for tabela in doc.tables:
+        for i, linha in enumerate(tabela.rows):
+            if i == 0:
+                continue
+            celulas = [c.text.strip() for c in linha.cells]
+            if len(celulas) >= 8:
+                _, valido, equipe, funcao, escola, cidade, estado, nome = celulas[:8]
+                registros.append({
+                    "Valido": valido,
+                    "Equipe": equipe,
+                    "Funcao": funcao.lower(),
+                    "Escola": escola,
+                    "Cidade": cidade,
+                    "Estado": estado,
+                    "Nome": nome
+                })
+
+    equipes = defaultdict(list)
+    for r in registros:
+        equipes[r["Equipe"]].append(r)
+
+    def chave_ord(membros):
+        try:
+            return float(membros[0]["Valido"].replace(",", "."))
+        except:
+            return float("inf")
+
+    equipes_ordenadas = sorted(equipes.items(), key=lambda x: chave_ord(x[1]))
+
+    dados_finais = []
+    for equipe_nome, membros in equipes_ordenadas:
+        lider = [m for m in membros if "líder" in m["Funcao"] or "lider" in m["Funcao"]]
+        acompanhante = [m for m in membros if "acompanhante" in m["Funcao"]]
+        alunos = sorted([m for m in membros if "aluno" in m["Funcao"]],
+                        key=lambda m: formatar_texto(m["Nome"]))
+
+        nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
+        nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
+
+        linhas_nomes = []
+        if nomes_lider:
+            linhas_nomes.append(nomes_lider)
+        if nomes_acompanhante:
+            linhas_nomes.append(nomes_acompanhante)
+        linhas_nomes += [formatar_texto(a["Nome"]) for a in alunos]
+
+        nomes_formatados = "\n".join(linhas_nomes)
+
+        info = membros[0]
+        dados_finais.append({
+            "{{LANCAMENTOS_VALIDOS}}": f"ALCANCE: {info['Valido']} m",
+            "{{NOME_EQUIPE}}": f"Equipe: {equipe_nome.split()[-1]}",
+            "{{NOME_ESCOLA}}": formatar_texto(info["Escola"]),
+            "{{CIDADE_UF}}": f"{formatar_texto(info['Cidade'])} / {formatar_texto(info['Estado'], True)}",
+            "{{NOMES_ALUNOS}}": nomes_formatados
+        })
+    return dados_finais
+
+def duplicate_slide_with_media(prs, source_slide):
+    layout = source_slide.slide_layout
+    new_slide = prs.slides.add_slide(layout)
+    for shape in source_slide.shapes:
+        new_el = deepcopy(shape.element)
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            try:
+                img_blob = shape.image.blob
+            except Exception:
+                img_blob = None
+            if img_blob:
+                image_part, new_rId = new_slide.part.get_or_add_image_part(BytesIO(img_blob))
+                new_el_xml = etree.fromstring(new_el.xml)
+                blips = new_el_xml.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                for blip in blips:
+                    blip.set('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed', new_rId)
+                from pptx.oxml import parse_xml
+                new_el = parse_xml(etree.tostring(new_el_xml, encoding='utf-8'))
+        new_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
+    return new_slide
+
+def replace_placeholders_in_shape(shape, team_data):
+    if not shape.has_text_frame:
+        return
+
+    # Texto completo da shape (mesmo se o placeholder estiver quebrado em runs)
     full_text_shape = "".join(run.text for p in shape.text_frame.paragraphs for run in p.runs)
 
     for key, value in team_data.items():
@@ -9,7 +121,7 @@
         tf = shape.text_frame
         tf.clear()
 
-        # NOMES (líder/acompanhante/alunos)
+        # NOMES (Líder, Acompanhante, Alunos)
         if key == "{{NOMES_ALUNOS}}":
             linhas = value.split("\n")
             for i, nome in enumerate(linhas):
@@ -23,7 +135,7 @@
                 p.alignment = PP_ALIGN.CENTER
                 p.line_spacing = None
 
-        # ALCANCE (com parte negrito + sublinhado)
+        # ALCANCE (com negrito e sublinhado)
         elif key == "{{LANCAMENTOS_VALIDOS}}":
             p = tf.paragraphs[0]
             match = re.match(r"(ALCANCE:\s*)([\d,.]+ m)", value, re.IGNORECASE)
@@ -43,8 +155,15 @@
                 run2.font.underline = True
                 run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
+            else:
+                run = p.add_run()
+                run.text = value
+                run.font.name = "Lexend"
+                run.font.bold = True
+                run.font.size = Pt(35)
+                run.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
 
-        # CAMPOS NORMAIS
+        # CAMPOS NORMAIS (Equipe, Escola, Cidade/UF)
         else:
             p = tf.paragraphs[0]
             run = p.add_run()
@@ -109,4 +228,3 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
