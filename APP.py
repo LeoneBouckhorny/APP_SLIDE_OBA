@@ -185,11 +185,11 @@ def replace_placeholders_in_shape(shape, team_data):
 def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
     """
     Gera uma apresentação PowerPoint a partir de um modelo de slide único.
-    Estratégia:
-    1. Carrega o PPTX modelo com um único slide.
-    2. Usa esse slide original como fonte para duplicar e criar um novo slide para CADA equipe.
-    3. Após criar todos os novos slides, remove o slide modelo original (que fica no início).
-    Isso garante que cada novo slide seja uma cópia fiel do modelo original.
+    Estratégia final e robusta:
+    1. Carrega o PPTX modelo.
+    2. Usa o slide original (índice 0) como fonte para duplicar e criar um novo slide para cada equipe.
+    3. Após criar todos os novos slides, obtém uma NOVA REFERÊNCIA ao slide que está na posição 0.
+    4. Remove o slide usando essa nova referência, evitando o erro de "elemento não é filho".
     """
     prs = Presentation(arquivo_pptx_modelo)
 
@@ -199,23 +199,27 @@ def gerar_apresentacao(dados_equipes, arquivo_pptx_modelo):
     if not dados_equipes:
         return prs  # Retorna a apresentação original se não houver dados
 
-    # Pega uma referência ao slide modelo original (o primeiro, índice 0)
-    slide_modelo_original = prs.slides[0]
+    # Pega uma referência ao slide modelo original. Usaremos ele como "molde".
+    slide_molde = prs.slides[0]
 
     # Itera sobre TODAS as equipes da lista de dados
     for dados_equipe in dados_equipes:
-        # Para cada equipe, cria um novo slide duplicando o modelo ORIGINAL
-        novo_slide = duplicate_slide_with_media(prs, slide_modelo_original)
+        # Para cada equipe, cria um novo slide duplicando o molde original
+        novo_slide = duplicate_slide_with_media(prs, slide_molde)
         
         # Preenche as informações no novo slide que acabou de ser criado
         for shape in novo_slide.shapes:
             replace_placeholders_in_shape(shape, dados_equipe)
 
-    # DEPOIS que o loop terminou e todos os slides foram criados,
-    # remove o slide modelo original, que ainda é o primeiro da lista.
-    # Acessamos o elemento XML para garantir uma remoção segura.
-    slide_modelo_xml = slide_modelo_original._element
-    prs.slides._sldIdLst.remove(slide_modelo_xml)
+    # --- A MUDANÇA CRÍTICA ESTÁ AQUI ---
+    # Após o loop, o slide modelo original AINDA É o primeiro (índice 0).
+    # Pegamos uma referência "fresca" a ele para garantir que a remoção funcione.
+    slide_a_remover = prs.slides[0]
+    
+    # Acessamos o elemento XML deste slide recém-referenciado para remoção.
+    xml_slides = prs.slides._sldIdLst
+    slides = list(xml_slides)
+    xml_slides.remove(slides[0])
 
     return prs
 
@@ -250,6 +254,7 @@ if st.button("✨ Gerar Apresentação"):
 
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
+
 
 
 
