@@ -9,6 +9,7 @@ from copy import deepcopy
 from io import BytesIO
 from lxml import etree
 import re
+import unicodedata
 
 # -------------------- CONFIGURAÇÃO INICIAL --------------------
 st.set_page_config(layout="wide")
@@ -21,25 +22,51 @@ def formatar_texto(texto, maiusculo_estado=False):
     texto = ' '.join(texto.strip().split())
     return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
 
+def normalizar_texto_base(txt):
+    txt = unicodedata.normalize("NFD", txt or "")
+    txt = "".join(ch for ch in txt if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", txt).strip().lower()
+
+
 def extrair_dados(uploaded_file):
     doc = Document(uploaded_file)
     registros = []
     for tabela in doc.tables:
-        for i, linha in enumerate(tabela.rows):
-            if i == 0:
+        if not tabela.rows:
+            continue
+
+        cabecalho = [c.text.strip() for c in tabela.rows[0].cells]
+        header_map = {normalizar_texto_base(texto): idx for idx, texto in enumerate(cabecalho)}
+
+        aliases = {
+            "Valido": ["valido", "alcance", "lancamentos validos", "lançamentos validos", "lançamentos válidos", "distancia"],
+            "Equipe": ["equipe", "nome da equipe"],
+            "Funcao": ["funcao", "função", "papel"],
+            "Escola": ["escola", "nome da escola", "instituicao"],
+            "Cidade": ["cidade", "municipio"],
+            "Estado": ["estado", "uf"],
+            "Nome": ["nome", "nome completo", "integrante", "participante"],
+        }
+
+        def obter_valor(linha_celulas, chave):
+            for alias in aliases[chave]:
+                idx = header_map.get(alias)
+                if idx is not None and idx < len(linha_celulas):
+                    return linha_celulas[idx].strip()
+            return ""
+
+        for linha in tabela.rows[1:]:
+            celulas = [c.text for c in linha.cells]
+            if not any(c.strip() for c in celulas):
                 continue
-            celulas = [c.text.strip() for c in linha.cells]
-            if len(celulas) >= 8:
-                _, valido, equipe, funcao, escola, cidade, estado, nome = celulas[:8]
-                registros.append({
-                    "Valido": valido,
-                    "Equipe": equipe,
-                    "Funcao": funcao.lower(),
-                    "Escola": escola,
-                    "Cidade": cidade,
-                    "Estado": estado,
-                    "Nome": nome
-                })
+
+            registro = {chave: obter_valor(celulas, chave) for chave in aliases.keys()}
+
+            if not registro["Equipe"] and not registro["Nome"]:
+                continue
+
+            registro["Funcao"] = registro["Funcao"].lower()
+            registros.append(registro)
 
     equipes = defaultdict(list)
     for r in registros:
@@ -110,6 +137,27 @@ def replace_placeholders_in_shape(shape, team_data):
 
     tf = shape.text_frame
 
+    # Quando os placeholders de nomes e equipe estão na mesma caixa de texto, mas em
+    # parágrafos diferentes, lidamos com todos de uma vez para garantir que as duas
+    # informações sejam aplicadas com o mesmo estilo.
+    frame_text = "\n".join("".join(run.text for run in paragraph.runs) for paragraph in tf.paragraphs)
+    if "{{NOMES_ALUNOS}}" in frame_text and "{{NOME_EQUIPE}}" in frame_text:
+        tf.clear()
+        linhas = team_data["{{NOMES_ALUNOS}}"].split("\n") + [team_data["{{NOME_EQUIPE}}"]]
+        for i, nome in enumerate(linhas):
+            p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
+            run = p.add_run()
+            run.text = nome
+            run.font.name = "Lexend"
+            run.font.bold = True
+            if i == len(linhas) - 1:  # última linha = nome da equipe
+                run.font.size = Pt(20)
+            else:
+                run.font.size = Pt(26.5)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            p.alignment = PP_ALIGN.CENTER
+        return
+
     for paragraph in list(tf.paragraphs):
         full_text = "".join(run.text for run in paragraph.runs)
 
@@ -152,23 +200,6 @@ def replace_placeholders_in_shape(shape, team_data):
                 run2.font.underline = True
                 run2.font.size = Pt(35)
                 run2.font.color.rgb = RGBColor(0x00, 0x6F, 0xC0)
-
-        # --- NOMES + EQUIPE ---
-        elif "{{NOMES_ALUNOS}}" in full_text and "{{NOME_EQUIPE}}" in full_text:
-            tf.clear()
-            linhas = team_data["{{NOMES_ALUNOS}}"].split("\n") + [team_data["{{NOME_EQUIPE}}"]]
-            for i, nome in enumerate(linhas):
-                p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-                run = p.add_run()
-                run.text = nome
-                run.font.name = "Lexend"
-                run.font.bold = True
-                if i == len(linhas) - 1:  # última linha = nome da equipe
-                    run.font.size = Pt(20)
-                else:
-                    run.font.size = Pt(26.5)
-                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                p.alignment = PP_ALIGN.CENTER
 
         # --- SOMENTE NOMES ---
         elif selected_key == "{{NOMES_ALUNOS}}":
@@ -226,10 +257,13 @@ def gerar_apresentacao(dados, template_stream):
         return prs
 
     modelo = prs.slides[0]
-    for _ in range(len(dados) - 1):
-        duplicate_slide_with_media(prs, modelo)
+    slides_para_preencher = [modelo]
 
-    for slide, team in zip(prs.slides, dados):
+    for _ in range(len(dados) - 1):
+        novo_slide = duplicate_slide_with_media(prs, modelo)
+        slides_para_preencher.append(novo_slide)
+
+    for slide, team in zip(slides_para_preencher, dados):
         for shape in slide.shapes:
             replace_placeholders_in_shape(shape, team)
 
