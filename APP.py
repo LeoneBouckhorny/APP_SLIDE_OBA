@@ -38,21 +38,43 @@ def extrair_dados(uploaded_file):
             continue
 
         cabecalho = [c.text.strip() for c in tabela.rows[0].cells]
-        header_map = {normalizar_texto_base(texto): idx for idx, texto in enumerate(cabecalho)}
+        header_map = {}
+        header_order = []
+        for idx, texto in enumerate(cabecalho):
+            chave_norm = normalizar_texto_base(texto)
+            header_map[chave_norm] = idx
+            header_order.append((chave_norm, idx))
 
         aliases = {
-            "Valido": ["valido", "alcance", "lancamentos validos", "lançamentos validos", "lançamentos válidos", "distancia"],
+            "Valido": ["valido", "alcance", "lancamentos validos", "lancamentos validos", "lancamentos validos (m)", "distancia", "distância"],
             "Equipe": ["equipe", "nome da equipe"],
-            "Funcao": ["funcao", "função", "papel"],
+            "Funcao": ["funcao", "funcao/role", "funcao na equipe", "funcao integrante", "funcao integrante", "papel"],
             "Escola": ["escola", "nome da escola", "instituicao"],
             "Cidade": ["cidade", "municipio"],
             "Estado": ["estado", "uf"],
             "Nome": ["nome", "nome completo", "integrante", "participante"],
         }
 
+        def resolver_indice(alias_norm):
+            if not alias_norm:
+                return None
+            idx = header_map.get(alias_norm)
+            if idx is not None:
+                return idx
+            for chave_norm, pos in header_order:
+                if alias_norm in chave_norm or chave_norm in alias_norm:
+                    return pos
+            alias_compacto = alias_norm.replace(" ", "")
+            if not alias_compacto:
+                return None
+            for chave_norm, pos in header_order:
+                if alias_compacto in chave_norm.replace(" ", ""):
+                    return pos
+            return None
+
         def obter_valor(linha_celulas, chave):
             for alias in aliases[chave]:
-                idx = header_map.get(normalizar_texto_base(alias))
+                idx = resolver_indice(normalizar_texto_base(alias))
                 if idx is not None and idx < len(linha_celulas):
                     return linha_celulas[idx].strip()
             return ""
