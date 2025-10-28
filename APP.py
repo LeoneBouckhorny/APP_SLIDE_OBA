@@ -46,9 +46,9 @@ def extrair_dados(uploaded_file):
             header_order.append((chave_norm, idx))
 
         aliases = {
-            "Valido": ["valido", "alcance", "lancamentos validos", "lancamentos validos", "lancamentos validos (m)", "distancia", "distância"],
+            "Valido": ["valido", "alcance", "lancamentos validos", "lancamentos validos (m)", "distancia"],
             "Equipe": ["equipe", "nome da equipe"],
-            "Funcao": ["funcao", "funcao/role", "funcao na equipe", "funcao integrante", "funcao integrante", "papel"],
+            "Funcao": ["funcao", "funcao/role", "funcao na equipe", "funcao integrante", "papel"],
             "Escola": ["escola", "nome da escola", "instituicao"],
             "Cidade": ["cidade", "municipio"],
             "Estado": ["estado", "uf"],
