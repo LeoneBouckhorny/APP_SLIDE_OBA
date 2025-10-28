@@ -9,6 +9,7 @@ from copy import deepcopy
 from io import BytesIO
 from lxml import etree
 import re
+import unicodedata
 
 # -------------------- CONFIGURAÇÃO INICIAL --------------------
 st.set_page_config(layout="wide")
@@ -21,25 +22,60 @@ def formatar_texto(texto, maiusculo_estado=False):
     texto = ' '.join(texto.strip().split())
     return texto.upper() if maiusculo_estado else ' '.join(w.capitalize() for w in texto.split())
 
+def normalizar_texto_base(texto):
+    if not texto:
+        return ""
+    texto = unicodedata.normalize("NFKD", str(texto))
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto.lower()
+
 def extrair_dados(uploaded_file):
     doc = Document(uploaded_file)
     registros = []
     for tabela in doc.tables:
-        for i, linha in enumerate(tabela.rows):
-            if i == 0:
+        if not tabela.rows:
+            continue
+
+        cabecalho = [c.text.strip() for c in tabela.rows[0].cells]
+        header_map = {normalizar_texto_base(texto): idx for idx, texto in enumerate(cabecalho)}
+
+        aliases = {
+            "Valido": ["valido", "alcance", "lancamentos validos", "lançamentos validos", "lançamentos válidos", "distancia"],
+            "Equipe": ["equipe", "nome da equipe"],
+            "Funcao": ["funcao", "função", "papel"],
+            "Escola": ["escola", "nome da escola", "instituicao"],
+            "Cidade": ["cidade", "municipio"],
+            "Estado": ["estado", "uf"],
+            "Nome": ["nome", "nome completo", "integrante", "participante"],
+        }
+
+        def obter_valor(linha_celulas, chave):
+            for alias in aliases[chave]:
+                idx = header_map.get(normalizar_texto_base(alias))
+                if idx is not None and idx < len(linha_celulas):
+                    return linha_celulas[idx].strip()
+            return ""
+
+        for linha in tabela.rows[1:]:
+            celulas = [c.text for c in linha.cells]
+            if not any(c.strip() for c in celulas):
                 continue
-            celulas = [c.text.strip() for c in linha.cells]
-            if len(celulas) >= 8:
-                _, valido, equipe, funcao, escola, cidade, estado, nome = celulas[:8]
-                registros.append({
-                    "Valido": valido,
-                    "Equipe": equipe,
-                    "Funcao": funcao.lower(),
-                    "Escola": escola,
-                    "Cidade": cidade,
-                    "Estado": estado,
-                    "Nome": nome
-                })
+
+            registro = {chave: obter_valor(celulas, chave) for chave in aliases.keys()}
+
+            if not registro["Equipe"] and not registro["Nome"]:
+                continue
+
+            registros.append({
+                "Valido": registro["Valido"],
+                "Equipe": registro["Equipe"],
+                "Funcao": registro["Funcao"].lower(),
+                "Escola": registro["Escola"],
+                "Cidade": registro["Cidade"],
+                "Estado": registro["Estado"],
+                "Nome": registro["Nome"]
+            })
 
     equipes = defaultdict(list)
     for r in registros:
