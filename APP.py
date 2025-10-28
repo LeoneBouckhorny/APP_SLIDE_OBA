@@ -38,45 +38,147 @@ def extrair_dados(uploaded_file):
             continue
 
         cabecalho = [c.text.strip() for c in tabela.rows[0].cells]
-        header_map = {}
-        header_order = []
-        for idx, texto in enumerate(cabecalho):
-            chave_norm = normalizar_texto_base(texto)
-            header_map[chave_norm] = idx
-            header_order.append((chave_norm, idx))
+        header_norm = [normalizar_texto_base(texto) for texto in cabecalho]
 
         aliases = {
-            "Valido": ["valido", "alcance", "lancamentos validos", "lancamentos validos (m)", "distancia"],
-            "Equipe": ["equipe", "nome da equipe"],
-            "Funcao": ["funcao", "funcao/role", "funcao na equipe", "funcao integrante", "papel"],
-            "Escola": ["escola", "nome da escola", "instituicao"],
-            "Cidade": ["cidade", "municipio"],
-            "Estado": ["estado", "uf"],
-            "Nome": ["nome", "nome completo", "integrante", "participante"],
+            "Valido": [
+                "valido",
+                "alcance",
+                "lancamentos validos",
+                "alcance (m)",
+                "distancia",
+                "distancia (m)",
+            ],
+            "Equipe": [
+                "equipe",
+                "nome da equipe",
+            ],
+            "Funcao": [
+                "funcao",
+                "funcao/role",
+                "funcao na equipe",
+                "funcao integrante",
+                "papel",
+                "cargo",
+            ],
+            "Escola": [
+                "escola",
+                "nome da escola",
+                "instituicao",
+                "nome da instituicao",
+                "colegio",
+                "nome do colegio",
+            ],
+            "Cidade": [
+                "cidade",
+                "municipio",
+            ],
+            "Estado": [
+                "estado",
+                "uf",
+            ],
+            "Nome": [
+                "nome",
+                "nome do integrante",
+                "nome integrante",
+                "nome do aluno",
+                "nome participante",
+                "integrante",
+                "participante",
+                "aluno",
+            ],
         }
 
-        def resolver_indice(alias_norm):
-            if not alias_norm:
-                return None
-            idx = header_map.get(alias_norm)
-            if idx is not None:
-                return idx
-            for chave_norm, pos in header_order:
-                if alias_norm in chave_norm or chave_norm in alias_norm:
-                    return pos
-            alias_compacto = alias_norm.replace(" ", "")
-            if not alias_compacto:
-                return None
-            for chave_norm, pos in header_order:
-                if alias_compacto in chave_norm.replace(" ", ""):
-                    return pos
-            return None
+        aliases_norm = {
+            campo: [normalizar_texto_base(alias) for alias in lista]
+            for campo, lista in aliases.items()
+        }
+
+        palavras_chave = {
+            "Valido": {"alcance", "valido", "validos", "lancamento", "lancamentos", "distancia"},
+            "Equipe": {"equipe", "time", "grupo"},
+            "Funcao": {"funcao", "papel", "cargo"},
+            "Escola": {"escola", "colegio", "instituicao"},
+            "Cidade": {"cidade", "municipio"},
+            "Estado": {"estado", "uf"},
+            "Nome": {
+                "nome",
+                "nomes",
+                "aluno",
+                "alunos",
+                "integrante",
+                "integrantes",
+                "participante",
+                "participantes",
+                "membro",
+                "membros",
+                "lider",
+                "acompanhante",
+                "responsavel",
+                "responsaveis",
+            },
+        }
+
+        tokens_por_coluna = []
+        for cab_norm in header_norm:
+            tokens = [tok for tok in re.split(r"[^a-z0-9]+", cab_norm) if tok]
+            tokens_por_coluna.append(tokens)
+
+        coluna_por_campo = {}
+        colunas_usadas = set()
+
+        def registrar(campo, idx):
+            if idx is None or idx in colunas_usadas:
+                return False
+            coluna_por_campo[campo] = idx
+            colunas_usadas.add(idx)
+            return True
+
+        # Correspondência exata com os aliases
+        for campo, lista_aliases in aliases_norm.items():
+            for alias_norm in lista_aliases:
+                if not alias_norm:
+                    continue
+                for idx, cab_norm in enumerate(header_norm):
+                    if idx in colunas_usadas:
+                        continue
+                    if cab_norm == alias_norm and registrar(campo, idx):
+                        break
+                if campo in coluna_por_campo:
+                    break
+
+        prioridade_campos = ["Valido", "Equipe", "Funcao", "Escola", "Cidade", "Estado", "Nome"]
+
+        def combina(campo, tokens, cab_norm):
+            if not cab_norm:
+                return False
+            tokens_set = set(tokens)
+            chaves = palavras_chave.get(campo, set())
+            if campo == "Nome":
+                if tokens_set & {"escola", "colegio", "instituicao"}:
+                    return False
+            for chave in chaves:
+                if chave in tokens_set:
+                    return True
+            for chave in chaves:
+                if chave and chave in cab_norm:
+                    return True
+            return False
+
+        for campo in prioridade_campos:
+            if campo in coluna_por_campo:
+                continue
+            for idx, tokens in enumerate(tokens_por_coluna):
+                if idx in colunas_usadas:
+                    continue
+                if combina(campo, tokens, header_norm[idx]):
+                    registrar(campo, idx)
+                    break
 
         def obter_valor(linha_celulas, chave):
-            for alias in aliases[chave]:
-                idx = resolver_indice(normalizar_texto_base(alias))
-                if idx is not None and idx < len(linha_celulas):
-                    return linha_celulas[idx].strip()
+            idx = coluna_por_campo.get(chave)
+            if idx is not None and idx < len(linha_celulas):
+                return linha_celulas[idx].strip()
             return ""
 
         for linha in tabela.rows[1:]:
