@@ -330,10 +330,3 @@ if st.button("✨ Gerar Apresentação"):
                 )
         except Exception as e:
             st.error(f"Erro ao gerar apresentação: {e}")
-
-
-
-
-
-
-
