@@ -10,10 +10,12 @@ from io import BytesIO
 from lxml import etree
 import re
 import unicodedata
+from PIL import Image
 
 # -------------------- CONFIGURAÇÃO INICIAL --------------------
 st.set_page_config(layout="wide")
-st.image("logo_jornada.png", use_container_width=True)
+logo = Image.open("logo_jornada.png")
+st.image(logo, width=logo.width // 2)
 st.title("🚀 Gerador Automático de Slides")
 st.info("CERTIFIQUE-SE DE ESTÁ FAZENDO O UPLOAD DOS ARQUIVOS CORRETOS ANTES DE GERAR OS SLIDES!")
 
