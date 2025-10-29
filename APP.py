@@ -17,7 +17,9 @@ st.set_page_config(layout="wide")
 logo = Image.open("logo_jornada.png")
 resample_filter = getattr(Image, "Resampling", Image).LANCZOS
 logo = logo.resize((1235, 426), resample_filter)
-st.image(logo, width=1235)
+_, col_logo, _ = st.columns([1, 4, 1])
+with col_logo:
+    st.image(logo, width=1235)
 st.title("🚀 Gerador Automático de Slides")
 st.info("CERTIFIQUE-SE DE ESTÁ FAZENDO O UPLOAD DOS ARQUIVOS CORRETOS ANTES DE GERAR OS SLIDES!")
 
