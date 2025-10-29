@@ -412,7 +412,7 @@ docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
 
 if "nome_arquivo" not in st.session_state:
-    st.session_state["nome_arquivo"] = "Apresentacao_Final_Equipes"
+    st.session_state["nome_arquivo"] = ""
 
 nome_arquivo_digitado = st.text_input(
     "Nome do arquivo (sem extensao)",
