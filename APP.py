@@ -30,6 +30,11 @@ def normalizar_texto_base(texto):
     texto = re.sub(r"\s+", " ", texto).strip()
     return texto.lower()
 
+def sanitizar_nome_arquivo(nome):
+    nome = (nome or "").strip()
+    nome = re.sub(r'[\\/:*?"<>|]', "", nome)
+    return nome or "Apresentacao_Final_Equipes"
+
 def extrair_dados(uploaded_file):
     doc = Document(uploaded_file)
     registros = []
@@ -406,6 +411,18 @@ def gerar_apresentacao(dados, template_stream):
 docx_file = st.file_uploader("📄 Arquivo DOCX", type=["docx"])
 pptx_file = st.file_uploader("📊 Arquivo PPTX modelo", type=["pptx"])
 
+if "nome_arquivo" not in st.session_state:
+    st.session_state["nome_arquivo"] = "Apresentacao_Final_Equipes"
+
+nome_arquivo_digitado = st.text_input(
+    "Nome do arquivo (sem extensao)",
+    value=st.session_state["nome_arquivo"],
+)
+
+if st.button("Confirmar nome do arquivo"):
+    st.session_state["nome_arquivo"] = sanitizar_nome_arquivo(nome_arquivo_digitado)
+    st.success(f"Nome para download ajustado para: {st.session_state['nome_arquivo']}.pptx")
+
 if st.button("✨ Gerar Apresentação"):
     if not docx_file or not pptx_file:
         st.warning("Envie ambos os arquivos.")
@@ -426,7 +443,7 @@ if st.button("✨ Gerar Apresentação"):
                 st.download_button(
                     "📥 Baixar Apresentação Final",
                     data=buf,
-                    file_name="Apresentacao_Final_Equipes.pptx",
+                    file_name=f"{st.session_state['nome_arquivo']}.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     use_container_width=True
                 )
