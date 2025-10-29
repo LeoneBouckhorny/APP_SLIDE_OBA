@@ -15,7 +15,9 @@ from PIL import Image
 # -------------------- CONFIGURAÇÃO INICIAL --------------------
 st.set_page_config(layout="wide")
 logo = Image.open("logo_jornada.png")
-st.image(logo, width=logo.width // 2)
+resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+logo = logo.resize((1235, 426), resample_filter)
+st.image(logo, width=1235)
 st.title("🚀 Gerador Automático de Slides")
 st.info("CERTIFIQUE-SE DE ESTÁ FAZENDO O UPLOAD DOS ARQUIVOS CORRETOS ANTES DE GERAR OS SLIDES!")
 
