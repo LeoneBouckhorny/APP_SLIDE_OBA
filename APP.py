@@ -228,7 +228,10 @@ def extrair_dados(uploaded_file):
     for equipe_nome, membros in equipes_ordenadas:
         lider = [m for m in membros if "líder" in m["Funcao"] or "lider" in m["Funcao"]]
         acompanhante = [m for m in membros if "acompanhante" in m["Funcao"]]
-        alunos = sorted([m for m in membros if "aluno" in m["Funcao"]], key=lambda m: formatar_texto(m["Nome"]))
+        alunos = sorted(
+            [m for m in membros if "aluno" in m["Funcao"]],
+            key=lambda m: normalizar_texto_base(m["Nome"])
+        )
 
         nomes_lider = formatar_texto(lider[0]["Nome"]) if lider else ""
         nomes_acompanhante = formatar_texto(acompanhante[0]["Nome"]) if acompanhante else ""
